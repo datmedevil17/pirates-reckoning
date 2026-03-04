@@ -9,6 +9,8 @@ import { Skeleton } from '../components/enemies/Skeleton';
 import { Sharky } from '../components/enemies/Sharky';
 import { Tentacle } from '../components/enemies/Tentacle';
 import { Barbarossa } from '../components/enemies/Barbarossa';
+import { SnakeEnemy } from '../components/enemies/SnakeEnemy';
+import { SpiderEnemy } from '../components/enemies/SpiderEnemy';
 import { IslandProps, IslandTerrain } from '../components/environment/IslandProps';
 import { Island2Animals } from '../components/environment/IslandAnimals';
 import { IslandSeaTentacles } from '../components/environment/SeaTentacles';
@@ -266,6 +268,28 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
                                 key={spawn.id}
                                 id={spawn.id}
                                 position={spawn.position}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
+                    if (spawn.type === 'snake') {
+                        return (
+                            <SnakeEnemy
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
+                                waypoints={spawn.waypoints ?? [spawn.position]}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
+                    if (spawn.type === 'spider') {
+                        return (
+                            <SpiderEnemy
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
+                                waypoints={spawn.waypoints ?? [spawn.position]}
                                 playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
                             />
                         );

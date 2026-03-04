@@ -401,9 +401,11 @@ export const ISLANDS: IslandDef[] = [
             { model: PROPS.chestGold,   position: [-5, 0, -35], interactive: true },
         ],
         enemySpawns: [
-            // ── BOSS — giant headless skeleton, guards the gold chest ─────────
-            { type: 'skeleton_headless', boss: true, position: [0, 0, -22],
-              waypoints: [[0,0,-22], [12,0,-32], [0,0,-44], [-12,0,-32]] },
+            // ── BOSSES — Serpent guards the west, Arachnis guards the east ─────
+            { type: 'snake',   position: [-14, 0, -28],
+              waypoints: [[-14,0,-28], [-22,0,-16], [-30,0,-38], [-8,0,-44]] },
+            { type: 'spider',  position: [14, 0, -28],
+              waypoints: [[14,0,-28],  [22,0,-16],  [30,0,-38],  [8,0,-44]]  },
 
             // ── 12 Regular Skeletons — spread across the island ───────────────
             { type: 'skeleton', position: [8, 0, 4],     waypoints: [[8,0,4],    [16,0,-4],   [10,0,-14],  [3,0,-4]]    },
