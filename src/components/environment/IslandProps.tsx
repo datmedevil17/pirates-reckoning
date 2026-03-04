@@ -187,3 +187,34 @@ export function IslandTerrain() {
         </>
     );
 }
+
+// ─── UnderwaterTerrain — seabed for the Sunken Depths island ──────────────────
+
+export function UnderwaterTerrain() {
+    return (
+        <>
+            {/* ── Seabed — wide dark silt base ── */}
+            <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+                <circleGeometry args={[180, 64]} />
+                <meshStandardMaterial color="#0e0b08" roughness={1.0} metalness={0} />
+            </mesh>
+
+            {/* ── Mid seabed — slightly lighter sediment ring ── */}
+            <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
+                <circleGeometry args={[80, 48]} />
+                <meshStandardMaterial color="#131008" roughness={0.98} metalness={0} />
+            </mesh>
+
+            {/* ── Centre rocky patch — darkest, volcanic rock feel ── */}
+            <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+                <circleGeometry args={[55, 48]} />
+                <meshStandardMaterial color="#0a0806" roughness={1.0} metalness={0.05} />
+            </mesh>
+
+            {/* ── Ground collider (Rapier) ── */}
+            <RigidBody type="fixed" position={[0, -1, 0]} friction={0.8} restitution={0}>
+                <CuboidCollider args={[250, 1, 250]} />
+            </RigidBody>
+        </>
+    );
+}

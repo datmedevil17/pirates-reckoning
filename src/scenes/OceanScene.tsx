@@ -87,6 +87,114 @@ function OceanDecorativeShips() {
     );
 }
 
+// ─── Whirlpool Marker (3D) — animated water-spiral shader ────────────────────
+
+const SWIRL_VERT = /* glsl */`
+    varying vec2 vUv;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`;
+
+const SWIRL_FRAG = /* glsl */`
+    uniform float uTime;
+    varying vec2 vUv;
+
+    void main() {
+        vec2 c = vUv - 0.5;
+        float dist = length(c);
+        float angle = atan(c.y, c.x);
+
+        // Spiral: tighter toward center, spins over time
+        float swirl = angle - dist * 12.0 + uTime * 2.8;
+        float bands = sin(swirl * 6.0) * 0.5 + 0.5;
+
+        // Outer edge fade + dark center hole
+        float outerFade  = smoothstep(0.50, 0.28, dist);
+        float innerHole  = smoothstep(0.06, 0.13, dist);
+        float alpha = outerFade * innerHole;
+
+        // Deep purple-black vortex — stands out sharply against bright blue ocean
+        float t = smoothstep(0.0, 0.45, dist);
+        vec3 outerCol = vec3(0.06, 0.02, 0.22);  // dark purple-indigo
+        vec3 innerCol = vec3(0.01, 0.00, 0.05);  // near-black abyss
+        vec3 color = mix(innerCol, outerCol, t);
+
+        // High-contrast bands: near-black troughs, brighter crests
+        color *= (0.10 + 0.90 * bands);
+
+        // Cyan-white spark on the sharpest crest lines
+        float sparks = pow(bands, 8.0);
+        color += vec3(0.15, 0.55, 1.0) * sparks * 0.9 * outerFade;
+
+        // Glowing ring just outside the center hole
+        float ring = smoothstep(0.12, 0.155, dist) * smoothstep(0.22, 0.17, dist);
+        color += vec3(0.3, 0.5, 1.0) * ring * 1.2;
+
+        // Outer fringe — faint purple shimmer at the edge
+        float fringe = smoothstep(0.48, 0.45, dist) * smoothstep(0.30, 0.38, dist);
+        color += vec3(0.5, 0.2, 1.0) * fringe * 0.45;
+
+        gl_FragColor = vec4(color, alpha * 0.96);
+    }
+`;
+
+function WhirlpoolMarker({ island }: { island: IslandDef }) {
+    const [ox, , oz] = island.oceanPosition;
+
+    const spiralMat = useMemo(() => new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: SWIRL_VERT,
+        fragmentShader: SWIRL_FRAG,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+    }), []);
+
+    const centerGlow = useRef<THREE.Mesh>(null!);
+    const lightRef   = useRef<THREE.PointLight>(null!);
+
+    useFrame(({ clock }) => {
+        const t = clock.getElapsedTime();
+        spiralMat.uniforms.uTime!.value = t;
+
+        // Center glow pulse
+        if (centerGlow.current) {
+            centerGlow.current.scale.setScalar(1 + Math.sin(t * 2.4) * 0.08);
+        }
+        if (lightRef.current) {
+            lightRef.current.intensity = 3.8 + Math.sin(t * 1.9) * 1.4;
+        }
+    });
+
+    return (
+        <group position={[ox, 0.05, oz]}>
+            {/* Swirling water plane — shader driven */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[52, 52, 1, 1]} />
+                <primitive object={spiralMat} attach="material" />
+            </mesh>
+
+            {/* Center abyss disc */}
+            <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <circleGeometry args={[5.5, 32]} />
+                <meshStandardMaterial color="#000610" emissive="#001020" emissiveIntensity={0.5} transparent opacity={0.98} depthWrite={false} />
+            </mesh>
+
+            {/* Glowing cyan rim around center hole */}
+            <mesh ref={centerGlow} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.09, 0]}>
+                <ringGeometry args={[5.5, 6.5, 40]} />
+                <meshStandardMaterial color="#00ccff" emissive="#0099dd" emissiveIntensity={1.6} transparent opacity={0.9} roughness={0.05} depthWrite={false} />
+            </mesh>
+
+            {/* Pulsing overhead glow + deep below glow */}
+            <pointLight ref={lightRef} position={[0, 3, 0]} color="#0055dd" distance={80} castShadow={false} />
+            <pointLight position={[0, -1, 0]} color="#00bbff" intensity={2.2} distance={20} />
+        </group>
+    );
+}
+
 // ─── Island Marker (3D) ────────────────────────────────────────────────────────
 
 function IslandMarker({ island }: { island: IslandDef }) {
@@ -222,7 +330,7 @@ function IslandList({ nearIsland, runNumber }: { nearIsland: IslandDef | null; r
                         }} />
                         <div>
                             <div style={{ color: isNear ? '#ffe080' : '#fff', fontSize: 13, fontWeight: 700 }}>
-                                {isHome ? '🏠 ' : ''}{island.name}
+                                {isHome ? '🏠 ' : island.theme === 'underwater' ? '〜 ' : ''}{island.name}
                             </div>
                             <div style={{ color: starColor, fontSize: 10 }}>{stars}</div>
                         </div>
@@ -260,6 +368,7 @@ export function OceanScene() {
         ? '★'.repeat(nearIsland.difficulty) + '☆'.repeat(5 - nearIsland.difficulty)
         : '';
     const isHome = nearIsland?.difficulty === 1;
+    const isWhirlpool = nearIsland?.theme === 'underwater';
 
     return (
         <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#0a1628' }}>
@@ -300,31 +409,47 @@ export function OceanScene() {
                     animation: 'slideUp 0.3s ease',
                 }}>
                     <div style={{
-                        background: 'rgba(0,0,0,0.8)',
-                        border: `1px solid ${isHome ? 'rgba(64,200,100,0.7)' : 'rgba(255,220,80,0.6)'}`,
+                        background: isWhirlpool ? 'rgba(0,8,24,0.92)' : 'rgba(0,0,0,0.8)',
+                        border: `1px solid ${
+                            isHome       ? 'rgba(64,200,100,0.7)' :
+                            isWhirlpool  ? 'rgba(0,120,255,0.7)'  :
+                                           'rgba(255,220,80,0.6)'
+                        }`,
                         borderRadius: 16, padding: '16px 32px',
                         backdropFilter: 'blur(12px)',
-                        boxShadow: `0 8px 32px ${isHome ? 'rgba(40,160,80,0.3)' : 'rgba(240,180,40,0.2)'}`,
+                        boxShadow: `0 8px 32px ${
+                            isHome       ? 'rgba(40,160,80,0.3)'   :
+                            isWhirlpool  ? 'rgba(0,80,220,0.4)'    :
+                                           'rgba(240,180,40,0.2)'
+                        }`,
                     }}>
-                        <div style={{ fontSize: 20, fontWeight: 900, color: isHome ? '#40ff80' : '#ffe080', letterSpacing: 2 }}>
-                            {isHome ? '🏠 ' : '🏝️ '}{nearIsland.name}
+                        <div style={{
+                            fontSize: 20, fontWeight: 900, letterSpacing: 2,
+                            color: isHome ? '#40ff80' : isWhirlpool ? '#44aaff' : '#ffe080',
+                        }}>
+                            {isHome ? '🏠 ' : isWhirlpool ? '〜 ' : '🏝️ '}{nearIsland.name}
                         </div>
-                        <div style={{ fontSize: 12, color: isHome ? '#30cc60' : '#f0c040', margin: '5px 0 14px', letterSpacing: 2 }}>
-                            {isHome ? 'HOME BASE · SAFE ZONE' : `DIFFICULTY · ${stars}`}
+                        <div style={{
+                            fontSize: 12, margin: '5px 0 14px', letterSpacing: 2,
+                            color: isHome ? '#30cc60' : isWhirlpool ? '#2288dd' : '#f0c040',
+                        }}>
+                            {isHome ? 'HOME BASE · SAFE ZONE' : isWhirlpool ? `DEPTH · ${stars}` : `DIFFICULTY · ${stars}`}
                         </div>
                         <button
                             onClick={handleAnchorDrop}
                             style={{
                                 background: isHome
                                     ? 'linear-gradient(135deg, #1a8040, #30c060)'
-                                    : 'linear-gradient(135deg, #c8860a, #f0b030)',
+                                    : isWhirlpool
+                                        ? 'linear-gradient(135deg, #00337a, #0055cc)'
+                                        : 'linear-gradient(135deg, #c8860a, #f0b030)',
                                 border: 'none', borderRadius: 10,
                                 padding: '12px 36px',
                                 color: '#fff', fontWeight: 900, fontSize: 15,
                                 cursor: 'pointer', letterSpacing: 2, textTransform: 'uppercase',
                             }}
                         >
-                            ⚓ {isHome ? 'Go Ashore' : 'Drop Anchor'}
+                            {isHome ? '⚓ Go Ashore' : isWhirlpool ? '〜 Descend' : '⚓ Drop Anchor'}
                         </button>
                     </div>
                     <style>{`@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
@@ -357,7 +482,9 @@ export function OceanScene() {
                     />
 
                     {ISLANDS.map(island => (
-                        <IslandMarker key={island.id} island={island} />
+                        island.theme === 'underwater'
+                            ? <WhirlpoolMarker key={island.id} island={island} />
+                            : <IslandMarker key={island.id} island={island} />
                     ))}
 
                     {/* Kraken clusters — 6 tentacles surround ship when it sails into zone */}

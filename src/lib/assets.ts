@@ -73,6 +73,18 @@ export const PROPS = {
     skull: '/models/Prop_Skull.gltf',
 } as const;
 
+// ─── Underwater ───────────────────────────────────────────────────────────────
+export const UNDERWATER = {
+    castle:      '/models/underwater/castle.gltf',
+    towerCenter: '/models/underwater/towercenter.gltf',
+    fish1:       '/models/underwater/Fish1.glb',
+    fish2:       '/models/underwater/Fish2.glb',
+    fish3:       '/models/underwater/Fish3.glb',
+    dolphin:     '/models/underwater/Dolphin.glb',
+    whale:       '/models/underwater/Whale.glb',
+    mantaRay:    '/models/underwater/MantaRay.glb',
+} as const;
+
 // ─── Ships ────────────────────────────────────────────────────────────────────
 export const SHIPS = {
     large: '/models/Ship_Large.gltf',

@@ -3,45 +3,45 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { ATTACK_RANGE, STAGGER_DURATION, ENEMY_CHASE_SPEED, SHARKY_HP } from '../../lib/constants';
+import { ATTACK_RANGE, STAGGER_DURATION, ENEMY_CHASE_SPEED, SHARK_HP } from '../../lib/constants';
 import type { AIState } from '../../lib/types';
 import { lerpAngle } from '../shared/AnimatedCharacter';
 import { useRunStore } from '../../store/runStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { useGameStore } from '../../store/gameStore';
 
-useGLTF.preload('/models/Characters_Sharky.gltf');
+useGLTF.preload('/models/Characters_Shark.gltf');
 
-const SHARKY_AGGRO = 16;  // how far Sharky detects player
+const SHARK_AGGRO = 18;  // large detection radius for the big shark
 
-interface SharkyProps {
+interface SharkEnemyProps {
     id: string;
     position: [number, number, number];
-    waypoints: [number, number, number][];
     playerPosRef: React.RefObject<THREE.Vector3>;
 }
 
-export function Sharky({ id, position, playerPosRef }: SharkyProps) {
-    const { scene, animations } = useGLTF('/models/Characters_Sharky.gltf');
+export function SharkEnemy({ id, position, playerPosRef }: SharkEnemyProps) {
+    const { scene, animations } = useGLTF('/models/Characters_Shark.gltf');
     const clone = useMemo(() => SkeletonUtils.clone(scene) as THREE.Group, [scene]);
     const { actions, names } = useAnimations(animations, clone);
 
-    const groupRef    = useRef<THREE.Group>(null!);
-    const pos         = useRef(new THREE.Vector3(...position));
-    const rotY        = useRef(0);
-    const curAnim     = useRef('');
-    const aiState     = useRef<AIState>('patrol');
-    const hp          = useRef(SHARKY_HP);
+    const groupRef     = useRef<THREE.Group>(null!);
+    const pos          = useRef(new THREE.Vector3(...position));
+    const rotY         = useRef(0);
+    const curAnim      = useRef('');
+    const aiState      = useRef<AIState>('patrol');
+    const hp           = useRef(SHARK_HP);
     const staggerTimer = useRef(0);
     const attackTimer  = useRef(0);
-    const isDead      = useRef(false);
-    const lootSpawned = useRef(false);
+    const isDead       = useRef(false);
+    const lootSpawned  = useRef(false);
 
     const removeEnemy = useRunStore(s => s.removeEnemy);
     const addLootDrop = useRunStore(s => s.addLootDrop);
     const takeDamage  = usePlayerStore(s => s.takeDamage);
     const addResource = useGameStore(s => s.addResource);
 
+    // Shark animations: Swim (idle), Swim_Fast (chase), Swim_Bite (attack)
     const resolveAnim = (name: string) => {
         if (actions[name]) return name;
         return names[0] ?? '';
@@ -51,9 +51,9 @@ export function Sharky({ id, position, playerPosRef }: SharkyProps) {
     playRef.current = (name: string, once = false) => {
         const target = resolveAnim(name);
         if (!target || !actions[target] || curAnim.current === target) return;
-        actions[curAnim.current]?.fadeOut(0.15);
+        actions[curAnim.current]?.fadeOut(0.20);
         const a = actions[target]!;
-        a.reset().fadeIn(0.15);
+        a.reset().fadeIn(0.20);
         a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
         if (once) a.clampWhenFinished = true;
         a.play();
@@ -62,7 +62,7 @@ export function Sharky({ id, position, playerPosRef }: SharkyProps) {
 
     useEffect(() => {
         curAnim.current = '';
-        const idle = resolveAnim('Idle');
+        const idle = resolveAnim('Swim');
         if (idle && actions[idle]) {
             Object.values(actions).forEach(a => a?.stop());
             actions[idle]!.reset().setLoop(THREE.LoopRepeat, Infinity).play();
@@ -82,24 +82,25 @@ export function Sharky({ id, position, playerPosRef }: SharkyProps) {
         if (isDead.current) {
             if (!lootSpawned.current) {
                 lootSpawned.current = true;
-                playRef.current('Death', true);
-                addLootDrop({ type: 'goldBag', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}` });
-                addResource('gold', 25);
-                setTimeout(() => removeEnemy(id), 3000);
+                playRef.current('Swim', true);
+                addLootDrop({ type: 'goldBag', position: [pos.current.x - 0.5, 0.2, pos.current.z], id: `loot-${id}-gold` });
+                addLootDrop({ type: 'gemBlue', position: [pos.current.x + 0.5, 0.2, pos.current.z], id: `loot-${id}-gem` });
+                addResource('gold', 40);
+                setTimeout(() => removeEnemy(id), 3500);
             }
             return;
         }
 
-        if (staggerTimer.current > 0) { staggerTimer.current -= dt; playRef.current('HitReact'); return; }
+        if (staggerTimer.current > 0) { staggerTimer.current -= dt; return; }
         if (!playerPos) return;
 
         const dist = pos.current.distanceTo(playerPos);
         if (attackTimer.current > 0) attackTimer.current -= dt;
 
-        // ── Simple AI: out of range → idle, in range → run, close → attack ──
-        if (dist <= ATTACK_RANGE) {
+        // ── Simple AI: out of range → swim idle, in range → swim fast, close → bite ──
+        if (dist <= ATTACK_RANGE * 1.5) {
             aiState.current = 'attack';
-        } else if (dist <= SHARKY_AGGRO) {
+        } else if (dist <= SHARK_AGGRO) {
             aiState.current = 'chase';
         } else {
             aiState.current = 'patrol';
@@ -107,20 +108,20 @@ export function Sharky({ id, position, playerPosRef }: SharkyProps) {
 
         if (aiState.current === 'attack') {
             const toPlayer = playerPos.clone().sub(pos.current);
-            rotY.current = lerpAngle(rotY.current, Math.atan2(toPlayer.x, toPlayer.z), 10 * dt);
-            playRef.current('Punch');
+            rotY.current = lerpAngle(rotY.current, Math.atan2(toPlayer.x, toPlayer.z), 8 * dt);
+            playRef.current('Swim_Bite');
             if (attackTimer.current <= 0) {
-                attackTimer.current = 1.5;
-                takeDamage(15);
+                attackTimer.current = 2.0;
+                takeDamage(20);
             }
         } else if (aiState.current === 'chase') {
             const dir = playerPos.clone().sub(pos.current).normalize();
-            pos.current.addScaledVector(dir, ENEMY_CHASE_SPEED * 1.2 * dt);
-            rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 10 * dt);
-            playRef.current('Run');
+            pos.current.addScaledVector(dir, ENEMY_CHASE_SPEED * dt);
+            rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 8 * dt);
+            playRef.current('Swim_Fast');
         } else {
-            // Out of range — stand still and idle
-            playRef.current('Idle');
+            // Out of range — slow idle swim in place
+            playRef.current('Swim');
         }
 
         group.position.copy(pos.current);
@@ -141,7 +142,9 @@ export function Sharky({ id, position, playerPosRef }: SharkyProps) {
 
     return (
         <group ref={groupRef}>
-            <primitive object={clone} />
+            <group scale={1.3}>
+                <primitive object={clone} />
+            </group>
         </group>
     );
 }

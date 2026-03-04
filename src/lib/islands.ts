@@ -1,5 +1,5 @@
 import type { IslandDef } from './types';
-import { ENV, PROPS, UI_MODELS, SHIPS } from './assets';
+import { ENV, PROPS, UI_MODELS, SHIPS, UNDERWATER } from './assets';
 
 export const ISLANDS: IslandDef[] = [
 
@@ -220,51 +220,70 @@ export const ISLANDS: IslandDef[] = [
     },
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // ISLAND 3: Ghost Port
+    // ISLAND 3: Sunken Depths — ocean floor cavern, entered via whirlpool
+    // Playable radius ~22u. fogFar=45 means walls at r=26 fade into darkness.
+    // NO dock, NO ship, NO water, NO trees — pure seabed ruins.
     // ─────────────────────────────────────────────────────────────────────────────
     {
-        id: 'ghost-port',
-        name: 'Ghost Port',
+        id: 'sunken-depths',
+        name: 'Sunken Depths',
         oceanPosition: [10, 0, 80],
         difficulty: 3,
-        theme: 'port',
-        lightingPreset: 'sunset',
-        dockPosition: [0, 0, 18],
-        goldChestPosition: [-16, 0, -8],
+        theme: 'underwater',
+        lightingPreset: 'underwater',
+        dockPosition: [0, 0, 32],   // player spawn — south seabed
+        goldChestPosition: [0, 0, -28],
         props: [
-            { model: ENV.dock, position: [0, 0, 22] },
-            { model: ENV.dockBroken, position: [10, 0, 22] },
-            { model: ENV.dockBroken, position: [-10, 0, 20] },
-            { model: ENV.dockPole, position: [5, 0, 22] },
-            { model: ENV.dockPole, position: [-5, 0, 22] },
-            { model: ENV.dockPole, position: [8, 0, 24] },
-            { model: ENV.house1, position: [-12, 0, 2], rotation: [0, 0.4, 0] },
-            { model: ENV.house2, position: [10, 0, -4], rotation: [0, -0.3, 0] },
-            { model: ENV.sawmill, position: [-18, 0, -6] },
-            { model: ENV.rock2, position: [-22, 0, 8], scale: 1.3 },
-            { model: ENV.rock4, position: [20, 0, -8], scale: 1.2 },
-            { model: ENV.rock5, position: [-8, 0, -18], scale: 1.1 },
-            { model: PROPS.cannon, position: [14, 0.5, 8] },
-            { model: PROPS.cannon, position: [-14, 0.5, 10] },
-            { model: PROPS.cannonBall, position: [15, 0.3, 8] },
-            { model: PROPS.barrel, position: [2, 0, 16], destructible: true },
-            { model: PROPS.barrel, position: [3, 0, 16], destructible: true },
-            { model: PROPS.barrel, position: [-2, 0, 16], destructible: true },
-            { model: PROPS.barrel, position: [-3, 0, 15], destructible: true },
-            { model: PROPS.barrel, position: [0, 0, 16], destructible: true },
-            { model: PROPS.anchor, position: [1, 0, 20] },
-            { model: PROPS.skull, position: [-6, 0.5, 4], scale: 1.2 },
-            { model: PROPS.skull, position: [8, 0.5, -10], scale: 1.2 },
-            { model: ENV.skulls, position: [5, 0.5, -14], scale: 1.1 },
-            { model: PROPS.chestClosed, position: [10, 0, -6], interactive: true },
-            { model: PROPS.chestGold, position: [-16, 0, -8], interactive: true },
+            // ── Castle — north centrepiece, entrance facing player ────────────
+            { model: UNDERWATER.castle,      position: [0,   0, -14], rotation: [0, Math.PI, 0], scale: 6.0 },
+            // ── Towers flanking the castle ────────────────────────────────────
+            { model: UNDERWATER.towerCenter, position: [-22, 0, -24], rotation: [0, 0.3,      0], scale: 4.5 },
+            { model: UNDERWATER.towerCenter, position: [22,  0, -24], rotation: [0, -0.3,     0], scale: 4.5 },
+
+            // ── Boundary wall — 18 cliff pieces, expanded ring r=40-44 ────────
+            // Walls loom out of the fog (fogFar=45) giving a sense of depth.
+            // North arc
+            { model: ENV.cliff3, position: [0,   -1, -44], rotation: [0, 0,        0], scale: 2.8 },
+            { model: ENV.cliff1, position: [-18, -1, -40], rotation: [0, 0.5,      0], scale: 2.4 },
+            { model: ENV.cliff2, position: [18,  -1, -40], rotation: [0, -0.5,     0], scale: 2.4 },
+            { model: ENV.cliff4, position: [-32, -1, -30], rotation: [0, 1.0,      0], scale: 2.3 },
+            { model: ENV.cliff3, position: [32,  -1, -30], rotation: [0, -1.0,     0], scale: 2.3 },
+            // NE / NW corners
+            { model: ENV.cliff1, position: [-40, -1, -18], rotation: [0, 1.3,      0], scale: 2.2 },
+            { model: ENV.cliff2, position: [40,  -1, -18], rotation: [0, -1.3,     0], scale: 2.2 },
+            // East arc
+            { model: ENV.cliff4, position: [44,  -1, -4],  rotation: [0, 1.6,      0], scale: 2.3 },
+            { model: ENV.cliff1, position: [43,  -1, 12],  rotation: [0, 2.0,      0], scale: 2.2 },
+            { model: ENV.cliff2, position: [38,  -1, 26],  rotation: [0, 2.4,      0], scale: 2.1 },
+            // West arc
+            { model: ENV.cliff3, position: [-44, -1, -4],  rotation: [0, -1.6,     0], scale: 2.3 },
+            { model: ENV.cliff4, position: [-43, -1, 12],  rotation: [0, -2.0,     0], scale: 2.2 },
+            { model: ENV.cliff1, position: [-38, -1, 26],  rotation: [0, -2.4,     0], scale: 2.1 },
+            // South arc
+            { model: ENV.cliff2, position: [-22, -1, 38],  rotation: [0, -2.8,     0], scale: 2.0 },
+            { model: ENV.cliff3, position: [22,  -1, 38],  rotation: [0, 2.8,      0], scale: 2.0 },
+            { model: ENV.cliff4, position: [0,   -1, 42],  rotation: [0, Math.PI,  0], scale: 2.2 },
+            // SE / SW corner gap-fillers
+            { model: ENV.cliff1, position: [-34, -1, -34], rotation: [0, 0.75,     0], scale: 2.1 },
+            { model: ENV.cliff2, position: [34,  -1, -34], rotation: [0, -0.75,    0], scale: 2.1 },
         ],
         enemySpawns: [
-            { type: 'skeleton', position: [6, 0, -4], waypoints: [[6, 0, -4], [10, 0, -2], [7, 0, -10]] },
-            { type: 'skeleton', position: [-8, 0, -8], waypoints: [[-8, 0, -8], [-4, 0, -6], [-10, 0, -3]] },
-            { type: 'skeleton_headless', position: [-5, 0, 6], waypoints: [[-5, 0, 6], [-8, 0, 10], [-3, 0, 14]] },
-            { type: 'sharky', position: [-18, 0, 8], waypoints: [[-18, 0, 8], [-18, 0, 14], [-12, 0, 18]] },
-            { type: 'sharky', position: [16, 0, 10], waypoints: [[16, 0, 10], [18, 0, 6], [12, 0, 16]] },
+            // ── 12 Sharky — stop when player out of range, charge when in range ──
+            { type: 'sharky', position: [-6,  0,  10], waypoints: [] },
+            { type: 'sharky', position: [6,   0,  10], waypoints: [] },
+            { type: 'sharky', position: [-14, 0,  6],  waypoints: [] },
+            { type: 'sharky', position: [14,  0,  6],  waypoints: [] },
+            { type: 'sharky', position: [-20, 0,  0],  waypoints: [] },
+            { type: 'sharky', position: [20,  0,  0],  waypoints: [] },
+            { type: 'sharky', position: [-8,  0,  18], waypoints: [] },
+            { type: 'sharky', position: [8,   0,  18], waypoints: [] },
+            { type: 'sharky', position: [-16, 0, -6],  waypoints: [] },
+            { type: 'sharky', position: [16,  0, -6],  waypoints: [] },
+            { type: 'sharky', position: [-22, 0,  8],  waypoints: [] },
+            { type: 'sharky', position: [22,  0,  8],  waypoints: [] },
+            // ── 2 Shark (large shark) — Swim_Fast chase, Swim_Bite attack ────
+            { type: 'shark',  position: [-10, 0, -10], waypoints: [] },
+            { type: 'shark',  position: [10,  0, -10], waypoints: [] },
         ],
     },
 

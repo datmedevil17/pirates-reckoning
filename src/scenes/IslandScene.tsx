@@ -11,8 +11,10 @@ import { Tentacle } from '../components/enemies/Tentacle';
 import { Barbarossa } from '../components/enemies/Barbarossa';
 import { SnakeEnemy } from '../components/enemies/SnakeEnemy';
 import { SpiderEnemy } from '../components/enemies/SpiderEnemy';
-import { IslandProps, IslandTerrain } from '../components/environment/IslandProps';
+import { SharkEnemy } from '../components/enemies/SharkEnemy';
+import { IslandProps, IslandTerrain, UnderwaterTerrain } from '../components/environment/IslandProps';
 import { Island2Animals } from '../components/environment/IslandAnimals';
+import { UnderwaterAnimals } from '../components/environment/UnderwaterAnimals';
 import { IslandSeaTentacles } from '../components/environment/SeaTentacles';
 import { LootDropsManager, Chest } from '../components/items/LootAndChests';
 import { HUD } from '../components/ui/HUD';
@@ -130,9 +132,11 @@ function IslandLighting({ preset }: { preset: string }) {
         overcast:{ ambient: 0.50, dirIntensity: 0.8, dirColor: '#c0d0d8', dirPos: [10, 20, 5],   hemiSky: '#8898b0', hemiGround: '#2a3a28', hemiIntensity: 0.20, fogColor: '#888ea0',  fogFar: 380 },
         sunset:  { ambient: 0.50, dirIntensity: 1.1, dirColor: '#ff9060', dirPos: [-20, 15, 5],  hemiSky: '#d06030', hemiGround: '#2a1a10', hemiIntensity: 0.25, fogColor: '#803820',  fogFar: 400 },
         // Bone Shore — dark moonlit night, cold blue light
-        night:   { ambient: 0.18, dirIntensity: 0.6, dirColor: '#2a4070', dirPos: [5, 20, -5],   hemiSky: '#0d1628', hemiGround: '#060a06', hemiIntensity: 0.10, fogColor: '#080e18',  fogNear: 25, fogFar: 260 },
-        storm:   { ambient: 0.18, dirIntensity: 0.5, dirColor: '#5070a0', dirPos: [0, 25, 0],    hemiSky: '#202838', hemiGround: '#101810', hemiIntensity: 0.10, fogColor: '#151e28',  fogFar: 280 },
-        jungle:  { ambient: 0.55, dirIntensity: 1.0, dirColor: '#d4f0a0', dirPos: [12, 32, 8],   hemiSky: '#a8e070', hemiGround: '#1a4010', hemiIntensity: 0.45, fogColor: '#0d2010',  fogNear: 30, fogFar: 100 },
+        night:     { ambient: 0.18, dirIntensity: 0.6, dirColor: '#2a4070', dirPos: [5, 20, -5],   hemiSky: '#0d1628', hemiGround: '#060a06', hemiIntensity: 0.10, fogColor: '#080e18',  fogNear: 25, fogFar: 260 },
+        storm:     { ambient: 0.18, dirIntensity: 0.5, dirColor: '#5070a0', dirPos: [0, 25, 0],    hemiSky: '#202838', hemiGround: '#101810', hemiIntensity: 0.10, fogColor: '#151e28',  fogFar: 280 },
+        jungle:    { ambient: 0.55, dirIntensity: 1.0, dirColor: '#d4f0a0', dirPos: [12, 32, 8],   hemiSky: '#a8e070', hemiGround: '#1a4010', hemiIntensity: 0.45, fogColor: '#0d2010',  fogNear: 30, fogFar: 100 },
+        // Sunken Depths — deep ocean, bioluminescent, heavy fog
+        underwater:{ ambient: 0.10, dirIntensity: 0.18, dirColor: '#0044aa', dirPos: [0, 30, 0],  hemiSky: '#001836', hemiGround: '#000c14', hemiIntensity: 0.12, fogColor: '#000c18',  fogNear: 5,  fogFar: 45  },
     };
     const cfg = configs[preset] ?? configs.day!;
     return (
@@ -195,13 +199,28 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
     return (
         <Physics gravity={[0, -9.81, 0]}>
             <IslandLighting preset={island.lightingPreset} />
-            <IslandTerrain />
+            {island.lightingPreset === 'underwater' ? <UnderwaterTerrain /> : <IslandTerrain />}
             <Environment preset={
-                island.lightingPreset === 'jungle'  ? 'forest'    :
-                island.lightingPreset === 'night'   ? 'night'     :
-                island.lightingPreset === 'storm'   ? 'warehouse' :
+                island.lightingPreset === 'jungle'     ? 'forest'    :
+                island.lightingPreset === 'night'      ? 'night'     :
+                island.lightingPreset === 'storm'      ? 'warehouse' :
+                island.lightingPreset === 'underwater' ? 'warehouse' :
                 'sunset'
             } />
+
+            {/* Bioluminescent point lights for underwater islands */}
+            {island.lightingPreset === 'underwater' && (
+                <>
+                    <pointLight position={[-8,  1.5, -6]}  color="#00aaff" intensity={3.5} distance={14} />
+                    <pointLight position={[10,  1.5, -8]}  color="#00ffcc" intensity={3.0} distance={12} />
+                    <pointLight position={[-4,  1.0, 10]}  color="#0077ff" intensity={2.8} distance={11} />
+                    <pointLight position={[14,  1.5, 6]}   color="#00ddaa" intensity={3.2} distance={13} />
+                    <pointLight position={[-18, 1.0, -10]} color="#00bbff" intensity={2.5} distance={11} />
+                    <pointLight position={[4,   1.0, -18]} color="#00ffee" intensity={3.0} distance={12} />
+                    <pointLight position={[-12, 1.5, 20]}  color="#0099ff" intensity={2.8} distance={11} />
+                    <pointLight position={[20,  1.5, 18]}  color="#00ccdd" intensity={2.5} distance={10} />
+                </>
+            )}
 
             {/* Static environment props */}
             <Suspense fallback={null}>
@@ -247,7 +266,17 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
                                 key={spawn.id}
                                 id={spawn.id}
                                 position={spawn.position}
-                                waypoints={spawn.waypoints ?? [spawn.position]}
+                                waypoints={spawn.waypoints ?? []}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
+                    if (spawn.type === 'shark') {
+                        return (
+                            <SharkEnemy
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
                                 playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
                             />
                         );
@@ -305,26 +334,33 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
                 </Suspense>
             )}
 
+            {/* Underwater ambient life — fish, dolphins, whale */}
+            {island.lightingPreset === 'underwater' && (
+                <Suspense fallback={null}>
+                    <UnderwaterAnimals />
+                </Suspense>
+            )}
+
             {/* Loot drops (managed by runStore) */}
             <LootDropsManager playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>} />
 
-            {/* Sea tentacles lurking at the water's edge — attack if player wades in */}
-            <Suspense fallback={null}>
-                <IslandSeaTentacles playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>} />
-            </Suspense>
-
-            {/* Decorative ships sailing in the sea (multiplayer look) */}
-            <Suspense fallback={null}>
-                <DecorativeShips />
-            </Suspense>
-
-            {/* Ship at dock — pushed further into water (Z+20) to prevent clipping with sand */}
-            <Suspense fallback={null}>
-                <Ship
-                    position={[island.dockPosition[0], island.dockPosition[1], island.dockPosition[2] + 20]}
-                    rotation={[0, Math.PI, 0]}
-                />
-            </Suspense>
+            {/* Sea tentacles + decorative ships + dock ship — suppressed underwater */}
+            {island.lightingPreset !== 'underwater' && (
+                <>
+                    <Suspense fallback={null}>
+                        <IslandSeaTentacles playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>} />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                        <DecorativeShips />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                        <Ship
+                            position={[island.dockPosition[0], island.dockPosition[1], island.dockPosition[2] + 20]}
+                            rotation={[0, Math.PI, 0]}
+                        />
+                    </Suspense>
+                </>
+            )}
 
             {/* Player */}
             <Suspense fallback={null}>
@@ -410,7 +446,7 @@ export function IslandScene() {
                     >
                         ⚓ Board Ship
                     </button>
-                    <style>{`@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+                    <style>{`@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes underwaterDrift{0%,100%{opacity:1}50%{opacity:0.7}}`}</style>
                 </div>
             )}
             {/* Fade overlay */}
@@ -440,6 +476,16 @@ export function IslandScene() {
                 💡 Walk into chests to collect · Click chests to open
             </div>
 
+            {/* Underwater colour tint overlay */}
+            {island?.lightingPreset === 'underwater' && (
+                <div style={{
+                    position: 'absolute', inset: 0, zIndex: 5, pointerEvents: 'none',
+                    background: 'rgba(0,25,60,0.30)',
+                    backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(0,80,200,0.20) 0%, transparent 68%)',
+                    animation: 'underwaterDrift 8s ease-in-out infinite',
+                }} />
+            )}
+
             {/* Canvas */}
             <Canvas
                 key={canvasKey}
@@ -456,7 +502,7 @@ export function IslandScene() {
                     });
                 }}
             >
-                <color attach="background" args={['#0a1020']} />
+                <color attach="background" args={[island?.lightingPreset === 'underwater' ? '#000c18' : '#0a1020']} />
                 <IslandSceneContents islandId={islandId} onInDockRange={setShowBoardButton} />
             </Canvas>
         </div>

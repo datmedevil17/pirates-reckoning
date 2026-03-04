@@ -19,7 +19,9 @@ export const SKELETON_HL_HP = 70;
 export const SKELETON_BOSS_HP = 210;  // 3× headless — island mini-boss
 export const SNAKE_HP = 160;
 export const SPIDER_HP = 180;
+export const MANTARAY_HP = 120;
 export const SHARKY_HP = 55;
+export const SHARK_HP  = 90;
 export const BARBAROSSA_HP = 300;
 
 // Weapon damage
