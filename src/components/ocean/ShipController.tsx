@@ -20,6 +20,8 @@ interface ShipControllerProps {
     initialYaw?: number;
     /** Ref updated every frame with the ship's world position (for external consumers) */
     posRef?: React.RefObject<THREE.Vector3>;
+    /** Active kraken tentacle positions — ship collides and bounces off them */
+    tentaclesRef?: React.RefObject<Map<string, THREE.Vector3>>;
 }
 
 export function ShipController({
@@ -28,6 +30,7 @@ export function ShipController({
     initialPosition = [0, 0, 0],
     initialYaw = 0,
     posRef,
+    tentaclesRef,
 }: ShipControllerProps) {
     const { scene } = useGLTF(SHIPS.large);
     const { camera } = useThree();
@@ -66,7 +69,6 @@ export function ShipController({
 
     // ── Wake particles (simple ring mesh that scales then disappears) ─────────
     const wakeRef = useRef<THREE.Mesh>(null!);
-    const wakeT = useRef(0);
 
     useFrame((_, delta) => {
         const ship = shipGroupRef.current;
@@ -135,14 +137,31 @@ export function ShipController({
             const dz = nextZ - iz;
             if (Math.sqrt(dx * dx + dz * dz) < ISLAND_BLOCK_RADIUS) {
                 blocked = true;
-                // Bounce back
                 velocityRef.current *= -0.3;
                 break;
             }
         }
+
         if (!blocked) {
             ship.position.x = nextX;
             ship.position.z = nextZ;
+        }
+
+        // ── Kraken grip — slow ship when inside tentacle ring, never hard-block ──
+        // Ship can always escape by steering, but movement feels sluggish / grabbed
+        if (tentaclesRef?.current && tentaclesRef.current.size > 0) {
+            let closestDist = Infinity;
+            for (const tp of tentaclesRef.current.values()) {
+                const dx = ship.position.x - tp.x;
+                const dz = ship.position.z - tp.z;
+                const d = Math.sqrt(dx * dx + dz * dz);
+                if (d < closestDist) closestDist = d;
+            }
+            // Within 20u of any arm → drag kicks in (0% at 20u, 70% drag at 0u)
+            if (closestDist < 20) {
+                const grip = 1 - (closestDist / 20);  // 0→1 as ship moves closer
+                velocityRef.current *= 1 - grip * 0.7 * dt * 12;
+            }
         }
 
         // Gentle roll into turns

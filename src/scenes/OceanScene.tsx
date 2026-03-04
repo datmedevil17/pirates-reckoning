@@ -164,7 +164,10 @@ export function OceanScene() {
     const { shipPosition, shipYaw, setScene, runNumber } = useGameStore();
 
     // Real-time ship position shared with KrakenTentacles
-    const shipPosRef = useRef<THREE.Vector3>(new THREE.Vector3(...shipPosition));
+    const shipPosRef    = useRef<THREE.Vector3>(new THREE.Vector3(...shipPosition));
+    // Active kraken tentacle positions for ship collision
+    const activePosRef  = useRef<Map<string, THREE.Vector3>>(new Map());
+    const [krakenWarning, setKrakenWarning] = useState(false);
 
     const handleAnchorDrop = () => {
         if (!nearIsland || fading) return;
@@ -269,6 +272,7 @@ export function OceanScene() {
                         initialPosition={shipPosition}
                         initialYaw={shipYaw}
                         posRef={shipPosRef}
+                        tentaclesRef={activePosRef}
                     />
 
                     {ISLANDS.map(island => (
@@ -276,9 +280,49 @@ export function OceanScene() {
                     ))}
 
                     {/* Kraken clusters — 6 tentacles surround ship when it sails into zone */}
-                    <KrakenTentacles shipPosRef={shipPosRef} />
+                    <KrakenTentacles
+                        shipPosRef={shipPosRef}
+                        activePosRef={activePosRef}
+                        onZoneChange={setKrakenWarning}
+                    />
                 </Suspense>
             </Canvas>
+
+            {/* Kraken warning overlay */}
+            {krakenWarning && (
+                <div style={{
+                    position: 'absolute', top: '18%', left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 25, pointerEvents: 'none',
+                    animation: 'krakenPulse 1.1s ease-in-out infinite',
+                }}>
+                    <div style={{
+                        color: '#ff2200', fontFamily: 'monospace',
+                        fontSize: 28, fontWeight: 900, letterSpacing: 4,
+                        textAlign: 'center', textTransform: 'uppercase',
+                        textShadow: '0 0 18px #ff4400, 0 0 40px #ff2200',
+                        background: 'rgba(0,0,0,0.72)',
+                        padding: '14px 36px', borderRadius: 12,
+                        border: '2px solid #ff2200',
+                        boxShadow: '0 0 32px rgba(255,34,0,0.4)',
+                    }}>
+                        ⚠️ &nbsp;KRAKEN APPROACHING&nbsp; ⚠️
+                    </div>
+                    <div style={{
+                        color: '#ff6644', fontFamily: 'monospace', fontSize: 13,
+                        textAlign: 'center', marginTop: 8, letterSpacing: 2,
+                        textShadow: '0 0 8px #ff4400',
+                    }}>
+                        Sail away or be dragged to the deep
+                    </div>
+                </div>
+            )}
+            <style>{`
+                @keyframes krakenPulse {
+                    0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+                    50%       { opacity: 0.65; transform: translateX(-50%) scale(1.04); }
+                }
+            `}</style>
         </div>
     );
 }
