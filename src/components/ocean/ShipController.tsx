@@ -22,6 +22,8 @@ interface ShipControllerProps {
     posRef?: React.RefObject<THREE.Vector3>;
     /** Active kraken tentacle positions — ship collides and bounces off them */
     tentaclesRef?: React.RefObject<Map<string, THREE.Vector3>>;
+    /** NPC ship positions — player ship bounces off them */
+    npcShipsRef?: React.RefObject<Map<string, THREE.Vector3>>;
 }
 
 export function ShipController({
@@ -31,6 +33,7 @@ export function ShipController({
     initialYaw = 0,
     posRef,
     tentaclesRef,
+    npcShipsRef,
 }: ShipControllerProps) {
     const { scene } = useGLTF(SHIPS.large);
     const { camera } = useThree();
@@ -142,6 +145,19 @@ export function ShipController({
             }
         }
 
+        // ── NPC ship collision — bounce off other ships ──────────────────────
+        if (!blocked && npcShipsRef?.current) {
+            for (const npcPos of npcShipsRef.current.values()) {
+                const dx = nextX - npcPos.x;
+                const dz = nextZ - npcPos.z;
+                if (Math.sqrt(dx * dx + dz * dz) < 12) {
+                    blocked = true;
+                    velocityRef.current *= -0.3;
+                    break;
+                }
+            }
+        }
+
         if (!blocked) {
             ship.position.x = nextX;
             ship.position.z = nextZ;
@@ -231,7 +247,7 @@ export function ShipController({
     const shipClone = useMemo(() => scene.clone(true), [scene]);
 
     return (
-        <group ref={shipGroupRef}>
+        <group ref={shipGroupRef} scale={1.5}>
             <primitive object={shipClone} />
             {/* Speed lines / wake visual below ship */}
             <mesh ref={wakeRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.35, 1]}>

@@ -1,13 +1,91 @@
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
+import { useGLTF } from '@react-three/drei';
 import { OceanWater } from '../components/ocean/OceanWater';
 import { ShipController } from '../components/ocean/ShipController';
 import { KrakenTentacles } from '../components/environment/SeaTentacles';
 import { ISLANDS } from '../lib/islands';
 import { useGameStore } from '../store/gameStore';
 import type { IslandDef } from '../lib/types';
+
+// ─── Decorative NPC ships sailing the open ocean ──────────────────────────────
+
+useGLTF.preload('/models/Ship_Large.gltf');
+useGLTF.preload('/models/Ship_Small.gltf');
+
+const OCEAN_SHIP_CONFIGS = [
+    { model: '/models/Ship_Large.gltf', radius: 160, speed: 0.038, angle: 0.5, flagColor: '#e74c3c', name: 'RedPete' },
+    { model: '/models/Ship_Large.gltf', radius: 240, speed: -0.025, angle: 2.3, flagColor: '#3498db', name: 'IronJaw' },
+    { model: '/models/Ship_Large.gltf', radius: 310, speed: 0.020, angle: 4.1, flagColor: '#f39c12', name: 'Saltbeard' },
+    { model: '/models/Ship_Small.gltf', radius: 130, speed: -0.052, angle: 1.4, flagColor: '#2ecc71', name: 'Duchess' },
+    { model: '/models/Ship_Small.gltf', radius: 200, speed: 0.045, angle: 3.7, flagColor: '#9b59b6', name: 'Blackfin' },
+    { model: '/models/Ship_Small.gltf', radius: 275, speed: -0.030, angle: 5.4, flagColor: '#1abc9c', name: 'Morwenna' },
+    { model: '/models/Ship_Small.gltf', radius: 148, speed: 0.058, angle: 0.9, flagColor: '#e67e22', name: 'Cutlass Cal' },
+] as const;
+
+function OceanSailingShip({ model, radius, speed, startAngle, flagColor }: {
+    model: string; radius: number; speed: number; startAngle: number; flagColor: string;
+}) {
+    const { scene } = useGLTF(model);
+    const clone = useMemo(() => {
+        const c = scene.clone(true);
+        c.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+        return c;
+    }, [scene]);
+
+    const groupRef = useRef<THREE.Group>(null!);
+    const angleRef = useRef(startAngle);
+    const flagH = model.includes('Large') ? 15 : 10;
+
+    useFrame((_, delta) => {
+        const ship = groupRef.current;
+        if (!ship) return;
+        const dt = Math.min(delta, 0.05);
+        angleRef.current += speed * dt;
+        const a = angleRef.current;
+        const t = performance.now() * 0.001;
+        ship.position.set(
+            Math.cos(a) * radius,
+            Math.sin(t * 0.5 + startAngle) * 0.18,
+            Math.sin(a) * radius,
+        );
+        ship.rotation.y = (speed > 0 ? 1 : -1) * Math.PI / 2 - a;
+        ship.rotation.z = Math.sin(t * 0.42 + startAngle * 1.2) * 0.032;
+        ship.rotation.x = Math.sin(t * 0.33 + startAngle * 0.8) * 0.018;
+    });
+
+    return (
+        <group ref={groupRef} scale={1.5}>
+            <primitive object={clone} />
+            {/* Coloured pennant flag */}
+            <mesh position={[0, flagH, 0.1]}>
+                <boxGeometry args={[2.0, 0.9, 0.08]} />
+                <meshStandardMaterial color={flagColor} emissive={flagColor} emissiveIntensity={0.5} />
+            </mesh>
+            {/* Glow point so the flag is visible at distance */}
+            <pointLight position={[0, flagH + 1, 0]} intensity={1.8} distance={40} color={flagColor} />
+        </group>
+    );
+}
+
+function OceanDecorativeShips() {
+    return (
+        <>
+            {OCEAN_SHIP_CONFIGS.map((cfg, i) => (
+                <OceanSailingShip
+                    key={i}
+                    model={cfg.model}
+                    radius={cfg.radius}
+                    speed={cfg.speed}
+                    startAngle={cfg.angle}
+                    flagColor={cfg.flagColor}
+                />
+            ))}
+        </>
+    );
+}
 
 // ─── Island Marker (3D) ────────────────────────────────────────────────────────
 
@@ -164,9 +242,9 @@ export function OceanScene() {
     const { shipPosition, shipYaw, setScene, runNumber } = useGameStore();
 
     // Real-time ship position shared with KrakenTentacles
-    const shipPosRef    = useRef<THREE.Vector3>(new THREE.Vector3(...shipPosition));
+    const shipPosRef = useRef<THREE.Vector3>(new THREE.Vector3(...shipPosition));
     // Active kraken tentacle positions for ship collision
-    const activePosRef  = useRef<Map<string, THREE.Vector3>>(new Map());
+    const activePosRef = useRef<Map<string, THREE.Vector3>>(new Map());
     const [krakenWarning, setKrakenWarning] = useState(false);
 
     const handleAnchorDrop = () => {
@@ -265,6 +343,9 @@ export function OceanScene() {
 
                 <Suspense fallback={null}>
                     <OceanWater size={900} />
+
+                    {/* NPC ships orbiting the open ocean */}
+                    <OceanDecorativeShips />
 
                     <ShipController
                         islands={ISLANDS}

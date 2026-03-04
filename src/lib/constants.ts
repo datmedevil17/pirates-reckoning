@@ -16,6 +16,9 @@ export const ENEMY_CHASE_SPEED = 4.5;
 export const MELEE_HITBOX_RADIUS = 0.8; // Rapier sphere sensor radius
 export const SKELETON_HP = 40;
 export const SKELETON_HL_HP = 70;
+export const SKELETON_BOSS_HP = 210;  // 3× headless — island mini-boss
+export const SNAKE_HP = 160;
+export const SPIDER_HP = 180;
 export const SHARKY_HP = 55;
 export const BARBAROSSA_HP = 300;
 

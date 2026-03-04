@@ -3,7 +3,7 @@
 export type CharacterChoice = 'anne' | 'henry';
 export type SceneName = 'ocean' | 'island' | 'naval' | 'ship';
 export type AIState = 'patrol' | 'alert' | 'chase' | 'attack' | 'stagger' | 'dead';
-export type EnemyType = 'skeleton' | 'skeleton_headless' | 'sharky' | 'shark' | 'tentacle' | 'barbarossa';
+export type EnemyType = 'skeleton' | 'skeleton_headless' | 'sharky' | 'shark' | 'tentacle' | 'barbarossa' | 'snake' | 'spider';
 export type IslandTheme = 'village' | 'ruins' | 'port' | 'jungle' | 'boss';
 export type LightingPreset = 'day' | 'overcast' | 'sunset' | 'night' | 'storm' | 'jungle';
 export type Hand = 'left' | 'right';
@@ -23,6 +23,7 @@ export interface EnemySpawn {
     type: EnemyType;
     position: [number, number, number];
     waypoints?: [number, number, number][];
+    boss?: boolean;
 }
 
 export interface IslandDef {

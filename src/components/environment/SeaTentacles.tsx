@@ -151,9 +151,11 @@ function SeaTentacle({
 
 // ─── Island Sea Ring ──────────────────────────────────────────────────────────
 
+// Island sand ends at radius ~180; water plane is at y=-1.2.
+// Tentacles must be placed at radius >180 so they sit in open water, never on the beach.
 const ISLAND_TENT_POS: [number, number, number][] = Array.from({ length: 8 }, (_, i) => {
     const a = (i / 8) * Math.PI * 2 + 0.2;
-    const r = 143 + (i % 3) * 11;
+    const r = 188 + (i % 3) * 10; // 188 / 198 / 208 — all past the sandy shore
     return [Math.cos(a) * r, 0, Math.sin(a) * r];
 });
 
@@ -161,8 +163,9 @@ export function IslandSeaTentacles({ playerPosRef }: { playerPosRef: React.RefOb
     return (
         <>
             {ISLAND_TENT_POS.map((pos, i) => (
+                // senseRange 70: only activates when player walks near the water's edge
                 <SeaTentacle key={i} position={pos} trackedPosRef={playerPosRef}
-                    senseRange={115} attackRange={22} waterY={-1.2} phase={i} dealDamage={true} />
+                    senseRange={70} attackRange={20} waterY={-1.2} phase={i} dealDamage={true} />
             ))}
         </>
     );

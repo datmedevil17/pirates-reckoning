@@ -89,12 +89,12 @@ void main() {
     float dist = length(vWorldPos.xz);
 
     // Mix based on distance (shallower towards island) and elevation
-    float depthFactor = smoothstep(0.0, 130.0, dist);
+    float depthFactor = smoothstep(0.0, 180.0, dist);
     float colorMix = clamp(depthFactor + vElevation * 0.4, 0.0, 1.0);
     vec3 color = mix(shallow, deep, colorMix);
 
     // Foam near shore and at wave peaks
-    float shoreFoam = smoothstep(100.0, 82.0, dist) * 0.6;
+    float shoreFoam = smoothstep(150.0, 130.0, dist) * 0.6;
     float peakFoam  = smoothstep(0.25, 0.45, vElevation) * 0.3;
     float foam = clamp(shoreFoam + peakFoam, 0.0, 1.0);
 
@@ -149,31 +149,31 @@ export function IslandTerrain() {
         <>
             {/* ── Big sand base ── */}
             <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
-                <circleGeometry args={[130, 64]} />
+                <circleGeometry args={[180, 64]} />
                 <meshStandardMaterial color="#c8a96e" roughness={0.95} metalness={0} />
             </mesh>
 
             {/* ── Grass (centre island) ── */}
             <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-                <circleGeometry args={[82, 64]} />
+                <circleGeometry args={[115, 64]} />
                 <meshStandardMaterial color="#5a8a3c" roughness={0.9} metalness={0} />
             </mesh>
 
             {/* ── Inner grass highlight ── */}
             <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
-                <circleGeometry args={[68, 48]} />
+                <circleGeometry args={[95, 48]} />
                 <meshStandardMaterial color="#67a044" roughness={0.85} metalness={0} />
             </mesh>
 
             {/* ── Beach / sand transition ring ── */}
             <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
-                <ringGeometry args={[78, 96, 64]} />
+                <ringGeometry args={[110, 135, 64]} />
                 <meshStandardMaterial color="#d4b47a" roughness={0.95} metalness={0} />
             </mesh>
 
             {/* ── Wet sand at water edge ── */}
             <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
-                <ringGeometry args={[116, 130, 64]} />
+                <ringGeometry args={[155, 180, 64]} />
                 <meshStandardMaterial color="#b8955a" roughness={0.98} metalness={0} />
             </mesh>
 
@@ -182,7 +182,7 @@ export function IslandTerrain() {
 
             {/* ── Ground collider (Rapier) ── */}
             <RigidBody type="fixed" position={[0, -1, 0]} friction={0.7} restitution={0}>
-                <CuboidCollider args={[200, 1, 200]} />
+                <CuboidCollider args={[250, 1, 250]} />
             </RigidBody>
         </>
     );

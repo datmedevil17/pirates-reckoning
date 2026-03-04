@@ -3,11 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, useAnimations, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { CHARACTERS } from '../../lib/assets';
 import {
-    AGGRO_RANGE, ATTACK_RANGE, STAGGER_DURATION,
+    AGGRO_RANGE, STAGGER_DURATION,
     ENEMY_PATROL_SPEED, ENEMY_CHASE_SPEED,
-    SKELETON_HP, SKELETON_HL_HP, SKELETON_BOSS_HP,
+    SNAKE_HP,
 } from '../../lib/constants';
 import type { AIState } from '../../lib/types';
 import { lerpAngle } from '../shared/AnimatedCharacter';
@@ -15,55 +14,51 @@ import { useRunStore } from '../../store/runStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { useGameStore } from '../../store/gameStore';
 
-// Preload
-useGLTF.preload(CHARACTERS.skeleton);
-useGLTF.preload(CHARACTERS.skeletonHL);
+const SNAKE_PATH = '/models/island2animals/Snake.glb';
+useGLTF.preload(SNAKE_PATH);
 
-interface SkeletonProps {
+// Distance constants for ranged-boss behaviour
+const SNAKE_ATTACK_RANGE = 7;  // trigger Attack anim
+const SNAKE_RETREAT_DIST = 3;  // back away if player this close
+const SNAKE_AGGRO = AGGRO_RANGE * 1.5;
+
+const FIDGET_ANIMS = ['Idle', 'Idle', 'Walk'] as const;
+
+interface SnakeEnemyProps {
     id: string;
     position: [number, number, number];
     waypoints: [number, number, number][];
-    headless?: boolean;
-    boss?: boolean;
     playerPosRef: React.RefObject<THREE.Vector3>;
 }
 
-// Idle fidget animations cycling during patrol pauses
-const FIDGET_ANIMS = ['Idle', 'Yes', 'No', 'Idle', 'Wave'] as const;
-
-// ─── Boss label (HTML billboard) ─────────────────────────────────────────────
-function BossLabel() {
+function SnakeBossLabel() {
     return (
-        <Html position={[0, 8.5, 0]} center distanceFactor={20} zIndexRange={[10, 0]}>
+        <Html position={[0, 9, 0]} center distanceFactor={20} zIndexRange={[10, 0]}>
             <div style={{
-                color: '#ff2200',
-                fontSize: 64,
+                color: '#00dd44',
+                fontSize: 56,
                 fontWeight: 900,
                 fontFamily: '"Georgia", serif',
-                textShadow: '0 0 18px #ff0000, 0 0 36px #ff0000, 3px 3px 0 #000, -1px -1px 0 #000',
-                letterSpacing: 10,
+                textShadow: '0 0 18px #00ff55, 0 0 36px #00ff55, 3px 3px 0 #000, -1px -1px 0 #000',
+                letterSpacing: 8,
                 whiteSpace: 'nowrap',
                 userSelect: 'none',
                 pointerEvents: 'none',
                 lineHeight: 1,
             }}>
-                ☠ BOSS ☠
+                ☠ SERPENT ☠
             </div>
         </Html>
     );
 }
 
-export function Skeleton({
+export function SnakeEnemy({
     id,
     position,
     waypoints,
-    headless = false,
-    boss = false,
     playerPosRef,
-}: SkeletonProps) {
-    // Boss is always headless variant
-    const path = (headless || boss) ? CHARACTERS.skeletonHL : CHARACTERS.skeleton;
-    const { scene, animations } = useGLTF(path);
+}: SnakeEnemyProps) {
+    const { scene, animations } = useGLTF(SNAKE_PATH);
     const clone = useMemo(() => SkeletonUtils.clone(scene) as THREE.Group, [scene]);
     const { actions, names } = useAnimations(animations, clone);
 
@@ -72,21 +67,15 @@ export function Skeleton({
     const rotY = useRef(0);
     const curAnim = useRef('');
     const aiState = useRef<AIState>('patrol');
-    const timeRef = useRef(0);
     const [dead, setDead] = useState(false);
 
-    // Stats — boss gets 3× HP, higher damage, faster
-    const isHeavy = boss || headless;
-    const maxHp = boss ? SKELETON_BOSS_HP : headless ? SKELETON_HL_HP : SKELETON_HP;
-    const hp = useRef(maxHp);
-    const attackDmg = boss ? 35 : headless ? 20 : 12;
-    const attackCooldown = boss ? 1.0 : headless ? 1.2 : 1.8;
-    const chaseSpeedMult = boss ? 1.6 : headless ? 1.3 : 1.0;
-    const aggroRange = boss ? AGGRO_RANGE * 1.5 : AGGRO_RANGE;
+    const hp = useRef(SNAKE_HP);
+    const attackDmg = 28;
+    const attackCooldown = 1.8;
+    const chaseSpeedMult = 1.2;
 
     const staggerTimer = useRef(0);
     const attackTimer = useRef(0);
-    const attackAnim = useRef<'Punch' | 'Sword'>('Punch');
 
     const waypointIdx = useRef(0);
     const waypointPause = useRef(0);
@@ -98,18 +87,24 @@ export function Skeleton({
 
     const isDead = useRef(false);
     const lootSpawned = useRef(false);
-    const removeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const removeEnemy = useRunStore(s => s.removeEnemy);
     const addLootDrop = useRunStore(s => s.addLootDrop);
     const takeDamage = usePlayerStore(s => s.takeDamage);
     const addResource = useGameStore(s => s.addResource);
 
+    // Resolve animation name — try exact, then prefixed
+    const resolveAnim = (name: string): string => {
+        if (actions[name]) return name;
+        const prefixed = `Snake_${name}`;
+        if (actions[prefixed]) return prefixed;
+        return names[0] ?? '';
+    };
+
     const playRef = useRef((_name: string, _once?: boolean) => { });
     playRef.current = (name: string, once = false) => {
-        const resolved = name === 'Jump_Idlea' ? 'Jump_Idle' : name;
-        const target = actions[resolved] ? resolved : name;
-        if (!actions[target] || curAnim.current === target) return;
+        const target = resolveAnim(name);
+        if (!target || !actions[target] || curAnim.current === target) return;
         actions[curAnim.current]?.fadeOut(0.15);
         const a = actions[target]!;
         a.reset().fadeIn(0.15);
@@ -121,8 +116,8 @@ export function Skeleton({
 
     useEffect(() => {
         curAnim.current = '';
-        const idle = names.includes('Idle') ? 'Idle' : (names[0] ?? '');
-        if (idle) {
+        const idle = resolveAnim('Idle');
+        if (idle && actions[idle]) {
             Object.values(actions).forEach(a => a?.stop());
             actions[idle]!.reset().setLoop(THREE.LoopRepeat, Infinity).play();
             curAnim.current = idle;
@@ -131,56 +126,33 @@ export function Skeleton({
             groupRef.current.position.copy(pos.current);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [path, actions, names]);
+    }, [actions, names]);
 
     useFrame((_, delta) => {
         const group = groupRef.current;
         if (!group) return;
 
         const dt = Math.min(delta, 0.05);
-        timeRef.current += delta;
         const playerPos = playerPosRef.current;
 
-        // ── Dead ────────────────────────────────────────────────────────────
+        // ── Dead ─────────────────────────────────────────────────────────────
         if (isDead.current) {
             if (!lootSpawned.current) {
                 lootSpawned.current = true;
                 playRef.current('Death', true);
-                if (boss) {
-                    // Boss always drops a haul
-                    addLootDrop({ type: 'goldBag',  position: [pos.current.x - 0.5, 0.2, pos.current.z],      id: `loot-${id}-gold1` });
-                    addLootDrop({ type: 'goldBag',  position: [pos.current.x + 0.5, 0.2, pos.current.z],      id: `loot-${id}-gold2` });
-                    addLootDrop({ type: 'gemPink',  position: [pos.current.x,       0.2, pos.current.z - 0.5], id: `loot-${id}-gem`   });
-                    addLootDrop({ type: 'bottle1',  position: [pos.current.x,       0.2, pos.current.z + 0.5], id: `loot-${id}-pot`   });
-                    addResource('gold', 60);
-                } else {
-                    const roll = Math.random();
-                    if (isHeavy) {
-                        if (roll < 0.5) {
-                            addLootDrop({ type: 'goldBag', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}-gold` });
-                            addResource('gold', 20);
-                        } else if (roll < 0.8) {
-                            addLootDrop({ type: 'bottle2', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}-pot` });
-                        } else {
-                            addLootDrop({ type: 'skull', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}-skull` });
-                        }
-                    } else {
-                        if (roll < 0.7) {
-                            addLootDrop({ type: 'coins', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}-coins` });
-                            addResource('gold', 5);
-                        } else if (roll < 0.9) {
-                            addLootDrop({ type: 'bottle1', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}-pot` });
-                        } else {
-                            addLootDrop({ type: 'skull', position: [pos.current.x, 0.2, pos.current.z], id: `loot-${id}-skull` });
-                        }
-                    }
-                }
-                removeTimer.current = setTimeout(() => removeEnemy(id), boss ? 5000 : 3000);
+                // Boss loot
+                addLootDrop({ type: 'goldBag',  position: [pos.current.x - 0.5, 0.2, pos.current.z],      id: `loot-${id}-gold1` });
+                addLootDrop({ type: 'goldBag',  position: [pos.current.x + 0.5, 0.2, pos.current.z],      id: `loot-${id}-gold2` });
+                addLootDrop({ type: 'gemGreen', position: [pos.current.x,       0.2, pos.current.z - 0.5], id: `loot-${id}-gem`   });
+                addLootDrop({ type: 'bottle2',  position: [pos.current.x,       0.2, pos.current.z + 0.5], id: `loot-${id}-pot`   });
+                addResource('gold', 50);
+                addResource('gemGreen', 1);
+                setTimeout(() => removeEnemy(id), 5000);
             }
             return;
         }
 
-        // ── Stagger ─────────────────────────────────────────────────────────
+        // ── Stagger ──────────────────────────────────────────────────────────
         if (staggerTimer.current > 0) {
             staggerTimer.current -= dt;
             playRef.current('HitReact');
@@ -193,25 +165,25 @@ export function Skeleton({
 
         if (attackTimer.current > 0) attackTimer.current -= dt;
 
-        // ── State transitions ─────────────────────────────────────────────────
-        if (dist < ATTACK_RANGE) {
+        // ── State transitions ─────────────────────────────────────────────
+        if (dist < SNAKE_ATTACK_RANGE) {
             aiState.current = 'attack';
-        } else if (dist < aggroRange) {
+        } else if (dist < SNAKE_AGGRO) {
             if (aiState.current === 'patrol' && !alertDone.current) {
                 alertDone.current = true;
-                alertTimer.current = boss ? 1.1 : 0.7;
+                alertTimer.current = 0.9;
                 aiState.current = 'alert';
             } else if (aiState.current !== 'alert') {
                 aiState.current = 'chase';
             }
         } else {
             aiState.current = 'patrol';
-            if (dist > aggroRange + 10) alertDone.current = false;
+            if (dist > SNAKE_AGGRO + 10) alertDone.current = false;
         }
 
-        // ── Alert / Spotted ───────────────────────────────────────────────────
+        // ── Alert ────────────────────────────────────────────────────────
         if (aiState.current === 'alert') {
-            playRef.current(isHeavy ? 'No' : 'Wave');
+            playRef.current('Idle');
             const dir = playerPos.clone().sub(pos.current).normalize();
             rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 6 * dt);
             alertTimer.current -= dt;
@@ -221,22 +193,39 @@ export function Skeleton({
             return;
         }
 
-        // ── Execute state ─────────────────────────────────────────────────────
+        // ── Execute state ─────────────────────────────────────────────────
         if (aiState.current === 'attack') {
-            playRef.current(attackAnim.current);
-            if (attackTimer.current <= 0) {
-                attackTimer.current = attackCooldown;
-                attackAnim.current = Math.random() < 0.5 ? 'Punch' : 'Sword';
-                takeDamage(attackDmg);
+            const toPlayer = playerPos.clone().sub(pos.current);
+            const faceAngle = Math.atan2(toPlayer.x, toPlayer.z);
+            rotY.current = lerpAngle(rotY.current, faceAngle, 8 * dt);
+
+            // Retreat if too close
+            if (dist < SNAKE_RETREAT_DIST) {
+                playRef.current('Walk');
+                const awayDir = pos.current.clone().sub(playerPos).normalize();
+                pos.current.addScaledVector(awayDir, ENEMY_CHASE_SPEED * chaseSpeedMult * dt);
+            } else {
+                playRef.current('Attack');
+                if (attackTimer.current <= 0) {
+                    attackTimer.current = attackCooldown;
+                    takeDamage(attackDmg);
+                }
             }
         } else if (aiState.current === 'chase') {
-            playRef.current('Run');
             const speed = ENEMY_CHASE_SPEED * chaseSpeedMult * dt;
             const dir = playerPos.clone().sub(pos.current).normalize();
             pos.current.addScaledVector(dir, speed);
-            rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 10 * dt);
+            rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 8 * dt);
+
+            // Use Jump when far away for a burst of speed
+            if (dist > 18) {
+                playRef.current('Jump');
+                pos.current.addScaledVector(dir, speed * 2);
+            } else {
+                playRef.current('Walk');
+            }
         } else {
-            // ── Patrol with waypoint pause & idle fidget ──────────────────────
+            // ── Patrol with waypoint pause & fidget ──────────────────────
             if (waypoints.length > 0) {
                 const wp = new THREE.Vector3(...waypoints[waypointIdx.current]!);
                 const dir = wp.clone().sub(pos.current);
@@ -249,18 +238,18 @@ export function Skeleton({
                         const anim = FIDGET_ANIMS[fidgetStep.current % FIDGET_ANIMS.length]!;
                         playRef.current(anim);
                         fidgetStep.current++;
-                        fidgetTimer.current = 1.2 + Math.random() * 1.5;
+                        fidgetTimer.current = 1.5 + Math.random() * 2.0;
                     }
-                } else if (d < 0.4) {
+                } else if (d < 0.5) {
                     waypointIdx.current = (waypointIdx.current + 1) % waypoints.length;
-                    waypointPause.current = 1.5 + Math.random() * 2.0;
+                    waypointPause.current = 2.0 + Math.random() * 2.5;
                     fidgetTimer.current = 0.1;
                     fidgetStep.current = Math.floor(Math.random() * FIDGET_ANIMS.length);
                 } else {
                     playRef.current('Walk');
                     dir.normalize();
                     pos.current.addScaledVector(dir, ENEMY_PATROL_SPEED * dt);
-                    rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 6 * dt);
+                    rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 5 * dt);
                 }
             } else {
                 playRef.current('Idle');
@@ -279,7 +268,7 @@ export function Skeleton({
                 hp.current -= damage;
                 if (hp.current <= 0) {
                     isDead.current = true;
-                    if (boss) setDead(true);
+                    setDead(true);
                 } else {
                     staggerTimer.current = STAGGER_DURATION;
                 }
@@ -288,14 +277,12 @@ export function Skeleton({
         }
     });
 
-    const scale = boss ? 3.0 : headless ? 1.4 : 1.3;
-
     return (
         <group ref={groupRef}>
-            <group scale={scale}>
+            <group scale={2.5}>
                 <primitive object={clone} />
             </group>
-            {boss && !dead && <BossLabel />}
+            {!dead && <SnakeBossLabel />}
         </group>
     );
 }

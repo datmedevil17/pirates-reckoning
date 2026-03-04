@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect, Suspense } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -44,23 +44,14 @@ export function LootDropItem({ id, type, position, playerPosRef }: LootDropProps
     const heal = usePlayerStore(s => s.heal);
     const addResource = useGameStore(s => s.addResource);
 
-    const meshRef = useRef<THREE.Group>(null!);
-    const posRef = useRef(new THREE.Vector3(...position));
+    const posVec = useRef(new THREE.Vector3(...position));
     const collected = useRef(false);
-    const t = useRef(0);
 
-    useFrame((_, delta) => {
-        if (collected.current || !meshRef.current) return;
-
-        // Spin the model for visibility
-        meshRef.current.rotation.y += delta * 1.5;
-
-        if (!playerPosRef.current) return;
-        const dist = meshRef.current.position.distanceTo(playerPosRef.current);
-        if (dist < 1.5) {
+    useFrame(() => {
+        if (collected.current || !playerPosRef.current) return;
+        if (posVec.current.distanceTo(playerPosRef.current) < 1.5) {
             collected.current = true;
             collectLoot(id);
-            // Apply effect
             if (type === 'bottle1') heal(30);
             else if (type === 'bottle2') heal(15);
             else if (type === 'coins') addResource('gold', 5);
@@ -74,22 +65,13 @@ export function LootDropItem({ id, type, position, playerPosRef }: LootDropProps
     if (!modelPath) return null;
 
     return (
-        <RigidBody
-            colliders="ball"
-            position={position}
-            restitution={0.5}
-            friction={0.8}
-            linearDamping={0.5}
-            angularDamping={0.5}
-        >
-            <group ref={meshRef}>
-                <LootModel id={id} modelPath={modelPath} />
-            </group>
-        </RigidBody>
+        <group position={[position[0], 0.3, position[2]]}>
+            <LootModel modelPath={modelPath} />
+        </group>
     );
 }
 
-function LootModel({ id, modelPath }: { id: string; modelPath: string }) {
+function LootModel({ modelPath }: { modelPath: string }) {
     const { scene } = useGLTF(modelPath);
     const clone = useMemo(() => scene.clone(true), [scene]);
 
@@ -105,7 +87,6 @@ function LootModel({ id, modelPath }: { id: string; modelPath: string }) {
     return (
         <group>
             <primitive object={clone} scale={0.7} />
-            <pointLight intensity={1.2} distance={2.5} color="#ffd060" decay={2} />
         </group>
     );
 }
@@ -184,12 +165,11 @@ export function Chest({ id, position, isGold = false, playerPosRef, onOpen }: Ch
             const dist = 0.5 + Math.random() * 0.8;
             const px = position[0] + Math.cos(angle) * dist;
             const pz = position[2] + Math.sin(angle) * dist;
-            const py = position[1] + 1; // Drop from above chest
 
             addLootDrop({
                 id: `loot-${id}-${i}-${Date.now()}`,
                 type: lootTypes[i % lootTypes.length] ?? 'coins',
-                position: [px, py, pz]
+                position: [px, 0, pz]
             });
         }
 

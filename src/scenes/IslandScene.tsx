@@ -118,14 +118,19 @@ function DecorativeShips() {
 // ─── Lighting per preset ───────────────────────────────────────────────────────
 
 function IslandLighting({ preset }: { preset: string }) {
-    const configs: Record<string, { ambient: number; dirColor: string; dirPos: [number, number, number]; fogColor: string; fogNear?: number; fogFar?: number }> = {
-        day:     { ambient: 0.7,  dirColor: '#fff5e0', dirPos: [20, 30, 10],  fogColor: '#87ceeb' },
-        overcast:{ ambient: 0.5,  dirColor: '#c0d0d8', dirPos: [10, 20, 5],   fogColor: '#888ea0' },
-        sunset:  { ambient: 0.5,  dirColor: '#ff9060', dirPos: [-20, 15, 5],  fogColor: '#803820' },
-        night:   { ambient: 0.15, dirColor: '#3050a0', dirPos: [5, 20, -5],   fogColor: '#11182a' },
-        storm:   { ambient: 0.2,  dirColor: '#6080a0', dirPos: [0, 25, 0],    fogColor: '#1a2030' },
-        // Dense jungle: warm dappled light, thick green canopy fog
-        jungle:  { ambient: 0.55, dirColor: '#d4f0a0', dirPos: [12, 32, 8],   fogColor: '#0d2010', fogNear: 30, fogFar: 100 },
+    type Cfg = {
+        ambient: number; dirIntensity: number; dirColor: string;
+        dirPos: [number, number, number]; hemiSky: string; hemiGround: string;
+        hemiIntensity: number; fogColor: string; fogNear?: number; fogFar?: number;
+    };
+    const configs: Record<string, Cfg> = {
+        day:     { ambient: 0.70, dirIntensity: 1.2, dirColor: '#fff5e0', dirPos: [20, 30, 10],  hemiSky: '#87ceeb', hemiGround: '#3a5a28', hemiIntensity: 0.30, fogColor: '#87ceeb',  fogFar: 420 },
+        overcast:{ ambient: 0.50, dirIntensity: 0.8, dirColor: '#c0d0d8', dirPos: [10, 20, 5],   hemiSky: '#8898b0', hemiGround: '#2a3a28', hemiIntensity: 0.20, fogColor: '#888ea0',  fogFar: 380 },
+        sunset:  { ambient: 0.50, dirIntensity: 1.1, dirColor: '#ff9060', dirPos: [-20, 15, 5],  hemiSky: '#d06030', hemiGround: '#2a1a10', hemiIntensity: 0.25, fogColor: '#803820',  fogFar: 400 },
+        // Bone Shore — dark moonlit night, cold blue light
+        night:   { ambient: 0.18, dirIntensity: 0.6, dirColor: '#2a4070', dirPos: [5, 20, -5],   hemiSky: '#0d1628', hemiGround: '#060a06', hemiIntensity: 0.10, fogColor: '#080e18',  fogNear: 25, fogFar: 260 },
+        storm:   { ambient: 0.18, dirIntensity: 0.5, dirColor: '#5070a0', dirPos: [0, 25, 0],    hemiSky: '#202838', hemiGround: '#101810', hemiIntensity: 0.10, fogColor: '#151e28',  fogFar: 280 },
+        jungle:  { ambient: 0.55, dirIntensity: 1.0, dirColor: '#d4f0a0', dirPos: [12, 32, 8],   hemiSky: '#a8e070', hemiGround: '#1a4010', hemiIntensity: 0.45, fogColor: '#0d2010',  fogNear: 30, fogFar: 100 },
     };
     const cfg = configs[preset] ?? configs.day!;
     return (
@@ -133,15 +138,13 @@ function IslandLighting({ preset }: { preset: string }) {
             <ambientLight intensity={cfg.ambient} />
             <directionalLight
                 position={cfg.dirPos}
-                intensity={1.2}
+                intensity={cfg.dirIntensity}
                 color={cfg.dirColor}
                 castShadow
                 shadow-mapSize={[1024, 1024]}
             />
-            <hemisphereLight
-                args={[preset === 'jungle' ? '#a8e070' : '#87ceeb', '#3a5a28', preset === 'jungle' ? 0.45 : 0.3]}
-            />
-            <fog attach="fog" args={[cfg.fogColor, cfg.fogNear ?? 40, cfg.fogFar ?? 120]} />
+            <hemisphereLight args={[cfg.hemiSky, cfg.hemiGround, cfg.hemiIntensity]} />
+            <fog attach="fog" args={[cfg.fogColor, cfg.fogNear ?? 40, cfg.fogFar ?? 420]} />
         </>
     );
 }
@@ -191,7 +194,12 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
         <Physics gravity={[0, -9.81, 0]}>
             <IslandLighting preset={island.lightingPreset} />
             <IslandTerrain />
-            <Environment preset={island.lightingPreset === 'jungle' ? 'forest' : 'sunset'} />
+            <Environment preset={
+                island.lightingPreset === 'jungle'  ? 'forest'    :
+                island.lightingPreset === 'night'   ? 'night'     :
+                island.lightingPreset === 'storm'   ? 'warehouse' :
+                'sunset'
+            } />
 
             {/* Static environment props */}
             <Suspense fallback={null}>
@@ -226,6 +234,7 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
                                 position={spawn.position}
                                 waypoints={spawn.waypoints ?? [spawn.position]}
                                 headless={spawn.type === 'skeleton_headless'}
+                                boss={spawn.boss}
                                 playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
                             />
                         );
@@ -412,7 +421,7 @@ export function IslandScene() {
                 key={canvasKey}
                 frameloop="always"
                 shadows
-                camera={{ position: [0, 4, 10], fov: 55, near: 0.1, far: 300 }}
+                camera={{ position: [0, 4, 10], fov: 55, near: 0.1, far: 650 }}
                 style={{ width: '100%', height: '100%' }}
                 onCreated={({ gl }) => {
                     gl.shadowMap.enabled = true;
