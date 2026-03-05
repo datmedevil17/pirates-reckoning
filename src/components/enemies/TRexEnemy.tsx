@@ -3,60 +3,62 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { CHARACTERS, WEAPONS } from '../../lib/assets';
-import { BARBAROSSA_HP, STAGGER_DURATION } from '../../lib/constants';
-import { lerpAngle, WeaponInHand } from '../shared/AnimatedCharacter';
-import { usePlayerStore } from '../../store/playerStore';
+import { STAGGER_DURATION, TREX_HP } from '../../lib/constants';
+import { lerpAngle } from '../shared/AnimatedCharacter';
 import { useRunStore } from '../../store/runStore';
+import { usePlayerStore } from '../../store/playerStore';
 import { useGameStore } from '../../store/gameStore';
 
-useGLTF.preload(CHARACTERS.barbarossa);
+useGLTF.preload('/models/island2animals/Trex.glb');
 
-const BARB_AGGRO       = 28;
-const BARB_ATTACK_DIST = 1.6;
-const BARB_WALK_SPEED  = 3.0;
-const BARB_RUN_SPEED   = 6.5;
-const BARB_PATROL_R    = 20;
-const BARB_PAUSE_TIME  = 2.5;
+const TREX_AGGRO       = 30;
+const TREX_ATTACK_DIST = 3.5;
+const TREX_WALK_SPEED  = 3.5;
+const TREX_RUN_SPEED   = 8.0;
+const TREX_DAMAGE      = 40;
+const TREX_ATTACK_CD   = 2.2;
+const TREX_PATROL_R    = 45;
+const TREX_PAUSE_TIME  = 2.5;
+const ROAR_DURATION    = 1.4; // seconds TRex_Jump plays on first aggro
 
-interface BarbarossaProps {
+interface TRexEnemyProps {
     id: string;
     position: [number, number, number];
+    zoneRadius?: number;
     playerPosRef: React.RefObject<THREE.Vector3>;
 }
 
-export function Barbarossa({ id, position, playerPosRef }: BarbarossaProps) {
-    const { scene, animations } = useGLTF(CHARACTERS.barbarossa);
+export function TRexEnemy({ id, position, zoneRadius = TREX_PATROL_R, playerPosRef }: TRexEnemyProps) {
+    const { scene, animations } = useGLTF('/models/island2animals/Trex.glb');
     const clone = useMemo(() => SkeletonUtils.clone(scene) as THREE.Group, [scene]);
     const { actions, names } = useAnimations(animations, clone);
 
     const groupRef     = useRef<THREE.Group>(null!);
     const pos          = useRef(new THREE.Vector3(...position));
     const spawnPos     = useRef(new THREE.Vector3(...position));
-    const rotY         = useRef(Math.PI);
+    const rotY         = useRef(0);
     const curAnim      = useRef('');
-    const hp           = useRef(BARBAROSSA_HP);
-    const phase        = useRef(1);
+    const hp           = useRef(TREX_HP);
     const staggerTimer = useRef(0);
-    const attackTimer  = useRef(2);
+    const attackTimer  = useRef(0);
+    const roarTimer    = useRef(0);   // plays TRex_Jump when TRex first spots player
+    const wasAggro     = useRef(false);
     const isDead       = useRef(false);
     const lootSpawned  = useRef(false);
-    const curCombo     = useRef('Sword');   // chosen combo held until next attack fires
-    const inAttack     = useRef(false);     // hysteresis flag to prevent boundary jitter
 
+    // Patrol
     const patrolTarget = useRef(new THREE.Vector3(...position));
     const pauseTimer   = useRef(0);
     const isWalking    = useRef(false);
 
-    const takeDamage  = usePlayerStore(s => s.takeDamage);
     const removeEnemy = useRunStore(s => s.removeEnemy);
     const addLootDrop = useRunStore(s => s.addLootDrop);
+    const takeDamage  = usePlayerStore(s => s.takeDamage);
     const addResource = useGameStore(s => s.addResource);
-    const setPhase    = useRunStore(s => s.setPhase);
 
     const pickPatrolTarget = () => {
         const angle = Math.random() * Math.PI * 2;
-        const r = 5 + Math.random() * BARB_PATROL_R;
+        const r = 8 + Math.random() * zoneRadius;
         patrolTarget.current.set(
             spawnPos.current.x + Math.cos(angle) * r,
             0,
@@ -65,25 +67,28 @@ export function Barbarossa({ id, position, playerPosRef }: BarbarossaProps) {
         isWalking.current = true;
     };
 
+    // ── Animation helper ──────────────────────────────────────────────────────
+    // Always resolves via the ref so useFrame never has stale closures
     const playRef = useRef((_name: string, _once?: boolean) => {});
     playRef.current = (name: string, once = false) => {
         const target = actions[name] ? name : (names[0] ?? '');
         if (!target || !actions[target] || curAnim.current === target) return;
-        actions[curAnim.current]?.fadeOut(0.2);
+        actions[curAnim.current]?.fadeOut(0.20);
         const a = actions[target]!;
-        a.reset().fadeIn(0.2);
+        a.reset().fadeIn(0.20);
         a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
         if (once) a.clampWhenFinished = true;
         a.play();
         curAnim.current = target;
     };
 
+    // Start idle + pick first patrol target once animations are ready
     useEffect(() => {
         if (names.length === 0) return;
         curAnim.current = '';
         Object.values(actions).forEach(a => a?.stop());
-        const idle = actions['Idle'];
-        if (idle) { idle.reset().setLoop(THREE.LoopRepeat, Infinity).play(); curAnim.current = 'Idle'; }
+        const idle = actions['TRex_Idle'];
+        if (idle) { idle.reset().setLoop(THREE.LoopRepeat, Infinity).play(); curAnim.current = 'TRex_Idle'; }
         if (groupRef.current) groupRef.current.position.copy(pos.current);
         pickPatrolTarget();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,74 +104,75 @@ export function Barbarossa({ id, position, playerPosRef }: BarbarossaProps) {
         if (isDead.current) {
             if (!lootSpawned.current) {
                 lootSpawned.current = true;
-                playRef.current('Death', true);
-                addLootDrop({ type: 'goldBag', position: [pos.current.x - 0.5, 0.3, pos.current.z], id: `loot-${id}-bag` });
-                addLootDrop({ type: 'gemBlue', position: [pos.current.x + 0.5, 0.3, pos.current.z], id: `loot-${id}-gem` });
-                addResource('gold', 100);
-                addResource('gemBlue', 3);
-                setTimeout(() => removeEnemy(id), 4000);
+                playRef.current('TRex_Death', true);
+                addLootDrop({ type: 'goldBag', position: [pos.current.x - 1.5, 0.2, pos.current.z], id: `loot-${id}-gold` });
+                addLootDrop({ type: 'gemBlue', position: [pos.current.x + 1.5, 0.2, pos.current.z], id: `loot-${id}-gem` });
+                addResource('gold', 80);
+                setTimeout(() => removeEnemy(id), 4500);
             }
             return;
         }
 
-        if (staggerTimer.current > 0) {
-            staggerTimer.current -= dt;
-            playRef.current('HitReact');
-            return;
-        }
+        if (staggerTimer.current > 0) { staggerTimer.current -= dt; return; }
 
         const dist = playerPos ? pos.current.distanceTo(playerPos) : Infinity;
         if (attackTimer.current > 0) attackTimer.current -= dt;
+        if (roarTimer.current > 0)   roarTimer.current   -= dt;
 
-        // Phase 2 trigger at 50% HP
-        if (hp.current < BARBAROSSA_HP * 0.5 && phase.current === 1) {
-            phase.current = 2;
-            setPhase(2);
-            playRef.current('Wave', true);
+        const inAggro = dist <= TREX_AGGRO;
+
+        // Trigger roar animation the moment TRex first spots the player
+        if (inAggro && !wasAggro.current) {
+            wasAggro.current = true;
+            roarTimer.current = ROAR_DURATION;
+            playRef.current('TRex_Jump', true);
+        }
+        if (!inAggro) wasAggro.current = false;
+
+        // ── Roar / aggro entry (TRex_Jump plays, TRex pauses briefly) ────────
+        if (roarTimer.current > 0) {
+            if (playerPos) {
+                const toPlayer = playerPos.clone().sub(pos.current);
+                rotY.current = lerpAngle(rotY.current, Math.atan2(toPlayer.x, toPlayer.z), 4 * dt);
+            }
+            group.position.copy(pos.current);
+            group.rotation.y = rotY.current;
+            return; // stand still while roaring
         }
 
-        const aggro = dist <= BARB_AGGRO;
-
-        // Hysteresis: enter attack at BARB_ATTACK_DIST, exit only when dist > +0.8
-        if (dist <= BARB_ATTACK_DIST) inAttack.current = true;
-        if (dist > BARB_ATTACK_DIST + 0.8) inAttack.current = false;
-
         // ── Attack ────────────────────────────────────────────────────────────
-        if (inAttack.current && playerPos) {
+        if (dist <= TREX_ATTACK_DIST && playerPos) {
             const toPlayer = playerPos.clone().sub(pos.current);
-            rotY.current = lerpAngle(rotY.current, Math.atan2(toPlayer.x, toPlayer.z), 6 * dt);
-            playRef.current(curCombo.current);
+            rotY.current = lerpAngle(rotY.current, Math.atan2(toPlayer.x, toPlayer.z), 8 * dt);
+            playRef.current('TRex_Attack');
             if (attackTimer.current <= 0) {
-                attackTimer.current = phase.current === 2 ? 0.9 : 1.4;
-                takeDamage(phase.current === 2 ? 28 : 18);
-                // Pick next combo only when an attack actually fires
-                curCombo.current = phase.current === 2 ? 'Sword' : (Math.random() < 0.5 ? 'Sword' : 'Punch');
+                attackTimer.current = TREX_ATTACK_CD;
+                takeDamage(TREX_DAMAGE);
             }
 
-        // ── Chase ─────────────────────────────────────────────────────────────
-        } else if (aggro && playerPos) {
+        // ── Chase (TRex_Run) ──────────────────────────────────────────────────
+        } else if (inAggro && playerPos) {
             const dir = playerPos.clone().sub(pos.current).normalize();
-            const speed = phase.current === 2 ? BARB_RUN_SPEED * 1.3 : BARB_RUN_SPEED;
-            pos.current.addScaledVector(dir, speed * dt);
-            rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 8 * dt);
-            playRef.current('Run');
+            pos.current.addScaledVector(dir, TREX_RUN_SPEED * dt);
+            rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 5 * dt);
+            playRef.current('TRex_Run');
 
-        // ── Patrol ───────────────────────────────────────────────────────────
+        // ── Patrol (TRex_Walk / TRex_Idle) ───────────────────────────────────
         } else {
             if (pauseTimer.current > 0) {
                 pauseTimer.current -= dt;
-                playRef.current('Idle');
+                playRef.current('TRex_Idle');
             } else if (isWalking.current) {
                 const toTarget = patrolTarget.current.clone().sub(pos.current);
-                if (toTarget.length() < 1.5) {
+                if (toTarget.length() < 2.0) {
                     isWalking.current = false;
-                    pauseTimer.current = BARB_PAUSE_TIME + Math.random() * 2;
-                    playRef.current('Idle');
+                    pauseTimer.current = TREX_PAUSE_TIME + Math.random() * 3;
+                    playRef.current('TRex_Idle');
                 } else {
                     const dir = toTarget.normalize();
-                    pos.current.addScaledVector(dir, BARB_WALK_SPEED * dt);
-                    rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 4 * dt);
-                    playRef.current('Walk');
+                    pos.current.addScaledVector(dir, TREX_WALK_SPEED * dt);
+                    rotY.current = lerpAngle(rotY.current, Math.atan2(dir.x, dir.z), 3 * dt);
+                    playRef.current('TRex_Walk');
                 }
             } else {
                 pickPatrolTarget();
@@ -183,7 +189,7 @@ export function Barbarossa({ id, position, playerPosRef }: BarbarossaProps) {
                 if (isDead.current) return;
                 hp.current -= damage;
                 if (hp.current <= 0) isDead.current = true;
-                else staggerTimer.current = STAGGER_DURATION * 0.5;
+                else staggerTimer.current = STAGGER_DURATION * 0.3;
             };
             groupRef.current.userData.enemyId = id;
         }
@@ -191,13 +197,9 @@ export function Barbarossa({ id, position, playerPosRef }: BarbarossaProps) {
 
     return (
         <group ref={groupRef}>
-            <group scale={1.6}>
+            <group scale={0.8}>
                 <primitive object={clone} />
-                <WeaponInHand characterScene={clone} weaponPath={WEAPONS.cutlass} />
             </group>
-            {phase.current === 2 && (
-                <pointLight color="#ff4400" intensity={3} distance={10} decay={2} />
-            )}
         </group>
     );
 }

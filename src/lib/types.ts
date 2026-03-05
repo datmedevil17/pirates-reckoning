@@ -3,7 +3,7 @@
 export type CharacterChoice = 'anne' | 'henry';
 export type SceneName = 'ocean' | 'island' | 'naval' | 'ship';
 export type AIState = 'patrol' | 'alert' | 'chase' | 'attack' | 'stagger' | 'dead';
-export type EnemyType = 'skeleton' | 'skeleton_headless' | 'sharky' | 'shark' | 'tentacle' | 'barbarossa' | 'snake' | 'spider' | 'mantaray';
+export type EnemyType = 'skeleton' | 'skeleton_headless' | 'sharky' | 'shark' | 'tentacle' | 'barbarossa' | 'snake' | 'spider' | 'mantaray' | 'trex' | 'wolf' | 'bigsnake' | 'raptor';
 export type IslandTheme = 'village' | 'ruins' | 'port' | 'jungle' | 'boss' | 'underwater';
 export type LightingPreset = 'day' | 'overcast' | 'sunset' | 'night' | 'storm' | 'jungle' | 'underwater';
 export type Hand = 'left' | 'right';

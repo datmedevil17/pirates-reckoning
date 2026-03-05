@@ -195,71 +195,217 @@ function WhirlpoolMarker({ island }: { island: IslandDef }) {
     );
 }
 
+// ─── Reusable palm-leaf fan ────────────────────────────────────────────────────
+
+function PalmLeaves({ color1 = '#2d7a22', color2 = '#3a9028' }: { color1?: string; color2?: string }) {
+    return (
+        <group>
+            {[0, 52, 104, 156, 208, 260, 312].map((deg, i) => {
+                const rad = (deg * Math.PI) / 180;
+                const tiltX = Math.cos(rad) * 0.55;
+                const tiltZ = Math.sin(rad) * 0.55;
+                return (
+                    <mesh
+                        key={i}
+                        position={[Math.sin(rad) * 1.2, 0.4, Math.cos(rad) * 1.2]}
+                        rotation={[tiltX, 0, -tiltZ]}
+                    >
+                        <boxGeometry args={[4.8, 0.07, 0.75]} />
+                        <meshStandardMaterial
+                            color={i % 2 === 0 ? color1 : color2}
+                            roughness={0.75}
+                            side={THREE.DoubleSide}
+                        />
+                    </mesh>
+                );
+            })}
+        </group>
+    );
+}
+
 // ─── Island Marker (3D) ────────────────────────────────────────────────────────
 
 function IslandMarker({ island }: { island: IslandDef }) {
     const [ox, , oz] = island.oceanPosition;
     const isHome = island.difficulty === 1;
+    const isBoss = island.difficulty === 5;
+    const isJungle = island.theme === 'jungle';
     const glowColor = isHome ? '#40ff80'
         : island.difficulty <= 2 ? '#ffe080'
             : island.difficulty <= 4 ? '#ff9040'
                 : '#ff3030';
 
-    const flagRef = useRef<THREE.Group>(null!);
+    const tree1Ref = useRef<THREE.Group>(null!);
+    const tree2Ref = useRef<THREE.Group>(null!);
+    const tree3Ref = useRef<THREE.Group>(null!);
+    const foamRef  = useRef<THREE.Mesh>(null!);
+    const flagRef  = useRef<THREE.Group>(null!);
+
     useFrame(({ clock }) => {
-        if (flagRef.current) {
-            flagRef.current.rotation.y = clock.getElapsedTime() * 0.5;
+        const t = clock.getElapsedTime();
+        if (tree1Ref.current) tree1Ref.current.rotation.z = Math.sin(t * 0.75) * 0.055;
+        if (tree2Ref.current) tree2Ref.current.rotation.z = Math.sin(t * 0.6 + 1.2) * 0.065;
+        if (tree3Ref.current) tree3Ref.current.rotation.z = Math.sin(t * 0.85 + 2.5) * 0.05;
+        if (foamRef.current) {
+            const mat = foamRef.current.material as THREE.MeshStandardMaterial;
+            mat.opacity = 0.28 + Math.sin(t * 1.3) * 0.14;
         }
+        if (flagRef.current) flagRef.current.rotation.y = t * 0.55;
     });
+
+    const sandColor   = isBoss ? '#a09080' : '#d4a86a';
+    const grassColor  = isBoss ? '#3a3a36' : isJungle ? '#2a6a1a' : '#4e8538';
+    const grassColor2 = isBoss ? '#2e2e2a' : isJungle ? '#1e5412' : '#3d7028';
+    const leafC1      = isBoss ? '#2a2820' : isJungle ? '#1a6010' : '#2d7a22';
+    const leafC2      = isBoss ? '#202018' : isJungle ? '#267418' : '#3a9028';
+    const trunkColor  = isBoss ? '#503828' : '#7a5530';
 
     return (
         <group position={[ox, 0, oz]}>
-            {/* Sandy base */}
+            {/* Shallow underwater shelf — gives a "reef" feel */}
+            <mesh position={[0, -1.4, 0]}>
+                <cylinderGeometry args={[19, 22, 1.8, 20]} />
+                <meshStandardMaterial color="#b09060" roughness={1} transparent opacity={0.5} />
+            </mesh>
+
+            {/* Main sandy beach base */}
             <mesh castShadow receiveShadow>
-                <cylinderGeometry args={[14, 16, 2, 24]} />
-                <meshStandardMaterial color="#c8a96e" roughness={0.9} />
+                <cylinderGeometry args={[13, 16.5, 2.8, 28]} />
+                <meshStandardMaterial color={sandColor} roughness={0.93} />
             </mesh>
-            {/* Grassy top */}
-            <mesh position={[0, 1, 0]}>
-                <cylinderGeometry args={[10, 13, 1.2, 24]} />
-                <meshStandardMaterial color="#4e8040" roughness={0.85} />
+
+            {/* Wet-sand ring right at the waterline */}
+            <mesh position={[0, 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[12.5, 16.8, 32]} />
+                <meshStandardMaterial
+                    color="#c09858"
+                    roughness={0.88} metalness={0.04}
+                    transparent opacity={0.6} depthWrite={false}
+                />
             </mesh>
-            {/* Palm trunk */}
-            <mesh position={[0, 4.2, 0]}>
-                <cylinderGeometry args={[0.3, 0.5, 5.5, 7]} />
-                <meshStandardMaterial color="#6b4c2a" roughness={0.9} />
+
+            {/* Animated sea-foam ring */}
+            <mesh ref={foamRef} position={[0, 0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[13.2, 15.5, 36]} />
+                <meshStandardMaterial
+                    color="#e8f4ff"
+                    roughness={1} transparent opacity={0.35} depthWrite={false}
+                />
             </mesh>
-            {/* Palm foliage */}
-            <mesh position={[0, 7.5, 0]}>
-                <sphereGeometry args={[3, 10, 8]} />
-                <meshStandardMaterial color="#2d7022" roughness={0.8} />
+
+            {/* Lower grass slope */}
+            <mesh position={[0, 1.6, 0]} castShadow>
+                <cylinderGeometry args={[9.5, 13, 2.2, 26]} />
+                <meshStandardMaterial color={grassColor} roughness={0.87} />
             </mesh>
-            {/* Second palm */}
-            <mesh position={[5, 3.5, 2]}>
-                <cylinderGeometry args={[0.25, 0.4, 4.5, 6]} />
-                <meshStandardMaterial color="#6b4c2a" roughness={0.9} />
+
+            {/* Central terrain hill — domed, not flat */}
+            <mesh position={[0, 3.2, 0]}>
+                <sphereGeometry args={[7, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.42]} />
+                <meshStandardMaterial color={grassColor2} roughness={0.85} />
             </mesh>
-            <mesh position={[5, 6.2, 2]}>
-                <sphereGeometry args={[2.5, 8, 6]} />
-                <meshStandardMaterial color="#3a8028" roughness={0.8} />
+
+            {/* Palm tree 1 — tallest, centre-left */}
+            <group ref={tree1Ref} position={[-1.5, 3.5, 1.5]}>
+                {/* Trunk — 3 angled segments for curvature */}
+                <mesh position={[0, 1.2, 0]} rotation={[0, 0, 0.08]}>
+                    <cylinderGeometry args={[0.32, 0.48, 2.4, 7]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <mesh position={[0.18, 3.4, 0]} rotation={[0, 0, 0.14]}>
+                    <cylinderGeometry args={[0.24, 0.32, 2.2, 7]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <mesh position={[0.42, 5.4, 0]} rotation={[0, 0, 0.18]}>
+                    <cylinderGeometry args={[0.18, 0.24, 2.0, 6]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <group position={[0.6, 6.8, 0]}>
+                    <PalmLeaves color1={leafC1} color2={leafC2} />
+                </group>
+            </group>
+
+            {/* Palm tree 2 — medium, right side, leaning right */}
+            <group ref={tree2Ref} position={[5.5, 3.2, -2]}>
+                <mesh position={[0, 1, 0]} rotation={[0, 0, -0.15]}>
+                    <cylinderGeometry args={[0.28, 0.42, 2, 7]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <mesh position={[-0.25, 2.8, 0]} rotation={[0, 0, -0.22]}>
+                    <cylinderGeometry args={[0.2, 0.28, 2, 7]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <mesh position={[-0.55, 4.5, 0]} rotation={[0, 0, -0.26]}>
+                    <cylinderGeometry args={[0.14, 0.2, 1.8, 6]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <group position={[-0.75, 5.7, 0]}>
+                    <PalmLeaves color1={leafC1} color2={leafC2} />
+                </group>
+            </group>
+
+            {/* Palm tree 3 — short, back */}
+            <group ref={tree3Ref} position={[-5, 3.0, -3]}>
+                <mesh position={[0, 1, 0]} rotation={[0, 0, 0.2]}>
+                    <cylinderGeometry args={[0.22, 0.36, 2.2, 7]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <mesh position={[0.3, 2.8, 0]} rotation={[0, 0, 0.28]}>
+                    <cylinderGeometry args={[0.16, 0.22, 1.8, 6]} />
+                    <meshStandardMaterial color={trunkColor} roughness={0.96} />
+                </mesh>
+                <group position={[0.5, 4.2, 0]}>
+                    <PalmLeaves color1={leafC1} color2={leafC2} />
+                </group>
+            </group>
+
+            {/* Shrub/bush clusters */}
+            <mesh position={[3.5, 3.6, 4]}>
+                <sphereGeometry args={[1.6, 9, 7]} />
+                <meshStandardMaterial color={isJungle ? '#1e6014' : '#3d7828'} roughness={0.88} />
             </mesh>
-            {/* Rock hint */}
-            <mesh position={[-6, 1.5, -3]}>
-                <dodecahedronGeometry args={[2.5, 0]} />
-                <meshStandardMaterial color="#888a80" roughness={0.95} />
+            <mesh position={[-3.5, 3.2, 4.5]}>
+                <sphereGeometry args={[1.3, 8, 6]} />
+                <meshStandardMaterial color={isJungle ? '#2a7a1a' : '#4a8830'} roughness={0.88} />
             </mesh>
-            {/* Glow beacon */}
-            <pointLight position={[0, 10, 0]} intensity={isHome ? 4 : 2.5} distance={35} color={glowColor} />
+
+            {/* Rock cluster */}
+            <mesh position={[-7.5, 1.8, -1.5]} rotation={[0.3, 0.9, 0.2]}>
+                <dodecahedronGeometry args={[2.0, 0]} />
+                <meshStandardMaterial color="#7a7a70" roughness={0.97} />
+            </mesh>
+            <mesh position={[-6, 1.3, 2.5]} rotation={[0.7, 0.4, 0.5]}>
+                <dodecahedronGeometry args={[1.3, 0]} />
+                <meshStandardMaterial color="#888878" roughness={0.97} />
+            </mesh>
+            <mesh position={[8, 1.6, 3]} rotation={[0.2, 1.4, 0.3]}>
+                <dodecahedronGeometry args={[1.6, 0]} />
+                <meshStandardMaterial color="#706860" roughness={0.97} />
+            </mesh>
+
+            {/* Ambient warm fill light from below (simulates sand bounce) */}
+            <pointLight position={[0, 1, 0]} intensity={1.4} distance={28} color="#ffe8b0" />
+            {/* Glow beacon above */}
+            <pointLight position={[0, 14, 0]} intensity={isBoss ? 6 : isHome ? 5 : 3} distance={45} color={glowColor} />
+
+            {/* Boss island: dark central spire */}
+            {isBoss && (
+                <mesh position={[0, 6, 0]} rotation={[0.05, 0.4, 0.05]}>
+                    <coneGeometry args={[3.5, 10, 8]} />
+                    <meshStandardMaterial color="#2a2420" roughness={0.98} />
+                </mesh>
+            )}
+
             {/* Home flag */}
             {isHome && (
-                <group ref={flagRef} position={[0, 9, 0]}>
+                <group ref={flagRef} position={[0, 12, 0]}>
                     <mesh>
-                        <cylinderGeometry args={[0.08, 0.08, 3, 5]} />
+                        <cylinderGeometry args={[0.07, 0.09, 3.5, 5]} />
                         <meshStandardMaterial color="#8b6030" />
                     </mesh>
-                    <mesh position={[0.6, 0.8, 0]}>
-                        <boxGeometry args={[1.2, 0.8, 0.05]} />
-                        <meshStandardMaterial color="#40cc60" />
+                    <mesh position={[0.75, 1, 0]}>
+                        <boxGeometry args={[1.5, 0.9, 0.06]} />
+                        <meshStandardMaterial color="#40cc60" emissive="#40cc60" emissiveIntensity={0.35} />
                     </mesh>
                 </group>
             )}
@@ -292,47 +438,83 @@ function OceanLighting() {
 
 // ─── Mini compass / island list ────────────────────────────────────────────────
 
+const ISLAND_THEME_ICON: Record<string, string> = {
+    village: '🏘', ruins: '🏚', port: '⚓', jungle: '🌴', boss: '💀', underwater: '〜',
+};
+
 function IslandList({ nearIsland, runNumber }: { nearIsland: IslandDef | null; runNumber: number }) {
     return (
         <div style={{
             position: 'absolute', top: 16, right: 16, zIndex: 10,
-            background: 'rgba(0,0,0,0.6)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 12, padding: '12px 16px',
-            backdropFilter: 'blur(8px)',
-            minWidth: 200,
+            background: 'linear-gradient(160deg, rgba(8,14,30,0.92), rgba(4,8,20,0.92))',
+            border: '1px solid rgba(255,255,255,0.09)',
+            borderTop: '1px solid rgba(255,220,80,0.2)',
+            borderRadius: 14, padding: '12px 14px',
+            backdropFilter: 'blur(12px)',
+            minWidth: 210,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 10 }}>
-                Islands · Run #{runNumber}
+            {/* Header */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginBottom: 10, paddingBottom: 8,
+                borderBottom: '1px solid rgba(255,255,255,0.07)',
+            }}>
+                <span style={{ fontSize: 14 }}>🗺</span>
+                <span style={{
+                    fontFamily: "'Pirata One', serif",
+                    fontSize: 14, color: '#ffe080', letterSpacing: 1,
+                    textShadow: '0 0 10px rgba(255,220,80,0.3)',
+                }}>
+                    Island Chart
+                </span>
+                <span style={{
+                    marginLeft: 'auto', fontSize: 9, fontFamily: 'monospace',
+                    color: 'rgba(255,255,255,0.3)', letterSpacing: 2,
+                    background: 'rgba(255,255,255,0.05)',
+                    padding: '2px 6px', borderRadius: 4,
+                }}>
+                    RUN #{runNumber}
+                </span>
             </div>
             {ISLANDS.map(island => {
                 const stars = '★'.repeat(island.difficulty) + '☆'.repeat(5 - island.difficulty);
                 const isNear = nearIsland?.id === island.id;
                 const isHome = island.difficulty === 1;
                 const starColor = isHome ? '#40cc60'
-                    : island.difficulty <= 2 ? '#ffe080'
+                    : island.difficulty <= 2 ? '#e8c860'
                         : island.difficulty <= 4 ? '#ff9040'
                             : '#ff4040';
+                const themeIcon = ISLAND_THEME_ICON[island.theme] ?? '🏝';
                 return (
                     <div key={island.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '6px 8px',
-                        borderRadius: 8,
-                        background: isNear ? 'rgba(255,220,80,0.12)' : 'transparent',
-                        border: isNear ? '1px solid rgba(255,220,80,0.4)' : '1px solid transparent',
-                        marginBottom: 4,
+                        display: 'flex', alignItems: 'center', gap: 9,
+                        padding: '6px 8px', borderRadius: 9,
+                        background: isNear ? 'rgba(255,220,80,0.1)' : 'transparent',
+                        border: isNear ? '1px solid rgba(255,220,80,0.35)' : '1px solid transparent',
+                        marginBottom: 3,
                         transition: 'all 0.3s',
+                        boxShadow: isNear ? '0 0 12px rgba(255,220,80,0.08)' : 'none',
                     }}>
+                        {/* Difficulty dot */}
                         <div style={{
-                            width: 8, height: 8, borderRadius: '50%',
+                            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
                             background: isNear ? '#ffe080' : starColor,
-                            boxShadow: isNear ? `0 0 8px ${starColor}` : 'none',
+                            boxShadow: isNear ? `0 0 8px ${starColor}, 0 0 16px ${starColor}60` : 'none',
+                            transition: 'all 0.3s',
                         }} />
-                        <div>
-                            <div style={{ color: isNear ? '#ffe080' : '#fff', fontSize: 13, fontWeight: 700 }}>
-                                {isHome ? '🏠 ' : island.theme === 'underwater' ? '〜 ' : ''}{island.name}
+                        {/* Theme icon */}
+                        <span style={{ fontSize: 12, opacity: 0.8 }}>{themeIcon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                                color: isNear ? '#ffe080' : 'rgba(255,255,255,0.85)',
+                                fontSize: 12, fontWeight: 700,
+                                whiteSpace: 'nowrap', overflow: 'hidden',
+                                textShadow: isNear ? '0 0 8px rgba(255,220,80,0.5)' : 'none',
+                            }}>
+                                {island.name}
                             </div>
-                            <div style={{ color: starColor, fontSize: 10 }}>{stars}</div>
+                            <div style={{ color: starColor, fontSize: 9, letterSpacing: 0.5 }}>{stars}</div>
                         </div>
                     </div>
                 );
@@ -384,17 +566,38 @@ export function OceanScene() {
             {/* Controls hint */}
             <div style={{
                 position: 'absolute', top: 16, left: 16, zIndex: 10,
-                color: 'rgba(255,255,255,0.65)', fontSize: 12,
-                background: 'rgba(0,0,0,0.45)',
+                background: 'linear-gradient(160deg, rgba(8,14,30,0.9), rgba(4,8,20,0.9))',
                 border: '1px solid rgba(255,255,255,0.08)',
-                padding: '10px 14px', borderRadius: 10,
-                fontFamily: 'monospace', lineHeight: 1.7,
-                backdropFilter: 'blur(8px)',
+                padding: '11px 14px', borderRadius: 12,
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
             }}>
-                <div>⬆ <b>W</b> — Sail forward</div>
-                <div>⬇ <b>S</b> — Brake / reverse</div>
-                <div>◀ <b>A</b> · ▶ <b>D</b> — Steer</div>
-                <div style={{ marginTop: 4, color: 'rgba(255,255,255,0.3)' }}>⚓ Approach island to anchor</div>
+                <div style={{
+                    fontSize: 9, letterSpacing: 3, color: 'rgba(255,220,80,0.5)',
+                    fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 8,
+                }}>Controls</div>
+                {[
+                    { key: 'W', label: 'Sail forward' },
+                    { key: 'S', label: 'Brake / reverse' },
+                    { key: 'A · D', label: 'Steer' },
+                ].map(({ key, label }) => (
+                    <div key={key} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        marginBottom: 5, fontSize: 11, color: 'rgba(255,255,255,0.6)',
+                        fontFamily: 'monospace',
+                    }}>
+                        <span className="game-key">{key}</span>
+                        <span>{label}</span>
+                    </div>
+                ))}
+                <div style={{
+                    marginTop: 7, paddingTop: 7,
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    fontSize: 10, color: 'rgba(255,255,255,0.28)',
+                    fontFamily: 'monospace', letterSpacing: 1,
+                }}>
+                    ⚓ Approach island to anchor
+                </div>
             </div>
 
             {/* Island list (top-right) */}

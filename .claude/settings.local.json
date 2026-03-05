@@ -9,7 +9,8 @@
       "Bash(for f in Deer Wolf)",
       "Bash(node -e \"const s = require\\(''/home/datmedevil/pirate-adventure/node_modules/three-stdlib''\\); console.log\\(Object.keys\\(s\\).filter\\(k=>k.toLowerCase\\(\\).includes\\(''skel''\\)\\)\\)\")",
       "Bash(bun build src/components/environment/IslandAnimals.tsx --target=browser)",
-      "Bash(bunx tsc --noEmit)"
+      "Bash(bunx tsc --noEmit)",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

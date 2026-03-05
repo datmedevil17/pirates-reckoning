@@ -1,5 +1,6 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { TestCharacterPage } from './pages/TestCharacterPage';
+import { CharacterPage } from './pages/CharacterPage';
 import { StartScreen } from './pages/StartScreen';
 import { OceanScene } from './scenes/OceanScene';
 import { IslandScene } from './scenes/IslandScene';
@@ -149,6 +150,7 @@ export function App() {
       <Route path="/ocean" element={<OceanScene />} />
       <Route path="/island/:id" element={<IslandScene />} />
       <Route path="/test" element={<TestCharacterPage />} />
+      <Route path="/character" element={<CharacterPage />} />
     </Routes>
   );
 }

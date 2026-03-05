@@ -12,7 +12,11 @@ import { Barbarossa } from '../components/enemies/Barbarossa';
 import { SnakeEnemy } from '../components/enemies/SnakeEnemy';
 import { SpiderEnemy } from '../components/enemies/SpiderEnemy';
 import { SharkEnemy } from '../components/enemies/SharkEnemy';
-import { IslandProps, IslandTerrain, UnderwaterTerrain } from '../components/environment/IslandProps';
+import { TRexEnemy } from '../components/enemies/TRexEnemy';
+import { WolfEnemy } from '../components/enemies/WolfEnemy';
+import { RoamingSnake } from '../components/enemies/RoamingSnake';
+import { VelociraptorEnemy } from '../components/enemies/VelociraptorEnemy';
+import { IslandProps, IslandTerrain, BossIslandTerrain, UnderwaterTerrain } from '../components/environment/IslandProps';
 import { Island2Animals } from '../components/environment/IslandAnimals';
 import { UnderwaterAnimals } from '../components/environment/UnderwaterAnimals';
 import { IslandSeaTentacles } from '../components/environment/SeaTentacles';
@@ -196,10 +200,16 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
         id: `${islandId}-enemy-${i}`,
     }));
 
+    // Shared pack aggro flags — one ref per pack per island mount
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const wolfPackAggroRef = useRef(false);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const raptorPackAggroRef = useRef(false);
+
     return (
         <Physics gravity={[0, -9.81, 0]}>
             <IslandLighting preset={island.lightingPreset} />
-            {island.lightingPreset === 'underwater' ? <UnderwaterTerrain /> : <IslandTerrain />}
+            {island.lightingPreset === 'underwater' ? <UnderwaterTerrain /> : island.theme === 'boss' ? <BossIslandTerrain /> : <IslandTerrain />}
             <Environment preset={
                 island.lightingPreset === 'jungle'     ? 'forest'    :
                 island.lightingPreset === 'night'      ? 'night'     :
@@ -323,6 +333,48 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
                             />
                         );
                     }
+                    if (spawn.type === 'trex') {
+                        return (
+                            <TRexEnemy
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
+                    if (spawn.type === 'wolf') {
+                        return (
+                            <WolfEnemy
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
+                                packAggroRef={wolfPackAggroRef}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
+                    if (spawn.type === 'bigsnake') {
+                        return (
+                            <RoamingSnake
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
+                    if (spawn.type === 'raptor') {
+                        return (
+                            <VelociraptorEnemy
+                                key={spawn.id}
+                                id={spawn.id}
+                                position={spawn.position}
+                                packAggroRef={raptorPackAggroRef}
+                                playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>}
+                            />
+                        );
+                    }
                     return null;
                 })}
             </Suspense>
@@ -344,15 +396,19 @@ function IslandSceneContents({ islandId, onInDockRange }: { islandId: string; on
             {/* Loot drops (managed by runStore) */}
             <LootDropsManager playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>} />
 
-            {/* Sea tentacles + decorative ships + dock ship — suppressed underwater */}
+            {/* Sea tentacles + decorative ships + dock ship — suppressed underwater/boss */}
             {island.lightingPreset !== 'underwater' && (
                 <>
-                    <Suspense fallback={null}>
-                        <IslandSeaTentacles playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>} />
-                    </Suspense>
-                    <Suspense fallback={null}>
-                        <DecorativeShips />
-                    </Suspense>
+                    {island.theme !== 'boss' && (
+                        <Suspense fallback={null}>
+                            <IslandSeaTentacles playerPosRef={playerPosRef as React.RefObject<THREE.Vector3>} />
+                        </Suspense>
+                    )}
+                    {island.theme !== 'boss' && (
+                        <Suspense fallback={null}>
+                            <DecorativeShips />
+                        </Suspense>
+                    )}
                     <Suspense fallback={null}>
                         <Ship
                             position={[island.dockPosition[0], island.dockPosition[1], island.dockPosition[2] + 20]}

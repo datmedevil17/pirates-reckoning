@@ -23,6 +23,10 @@ export const MANTARAY_HP = 120;
 export const SHARKY_HP = 55;
 export const SHARK_HP  = 90;
 export const BARBAROSSA_HP = 300;
+export const TREX_HP = 450;
+export const WOLF_HP = 80;
+export const BIGSNAKE_HP = 220;
+export const RAPTOR_HP = 100;
 
 // Weapon damage
 export const DAMAGE: Record<string, number> = {
